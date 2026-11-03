@@ -1,25 +1,21 @@
-# Biblioteca de trazos
+# TEXTURES
 
-Imágenes de trazos (generadas con IA) a partir de las que Trazo construye sus pinceles reales.
+Aquí van las carpetas con las imágenes de trazos, una carpeta por técnica.
+Sube tus carpetas tal cual: **Add file › Upload files** y arrastra las carpetas enteras.
 
 | Carpeta | Técnica en el plugin |
 |---|---|
-| `AGUADAS/` | Acuarela |
-| `GUACHE/` | Gouache |
-| `LAPIZ/` | Lápiz |
-| `OLEO/` | Óleo |
-| `CERAS/` | Ceras |
-
-## Cómo subirlas
-1. En GitHub, entra en la carpeta de la técnica (por ejemplo `trazos/OLEO`).
-2. **Add file › Upload files** y arrastra las imágenes de esa técnica.
-3. **Commit changes**.
+| `AGUADAS` | Acuarela |
+| `GUACHE` | Gouache |
+| `LAPIZ` | Lápiz |
+| `OLEO` | Óleo |
+| `CERAS` | Ceras |
 
 ## Formato de las imágenes
 - 9:16 en vertical, fondo blanco y trazos en gris.
 - Tres trazos por imagen, separados entre sí.
 - Verticales y **empezando arriba**.
-- No hace falta nombrarlas: la carpeta indica la técnica y el procesado les pone nombre.
+- No hace falta nombrarlas: la carpeta indica la técnica.
 
 ## Qué hace el procesado
 1. Limpia el fondo y separa cada trazo, uniendo sus fragmentos y migas cercanas.

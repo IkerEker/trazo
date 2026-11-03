@@ -138,7 +138,7 @@ tools/
   run.js             ← prueba el motor en Node con una imagen
   serve.js + mock-photoshop.js ← el panel en el navegador con Photoshop simulado
   shots.js, flow_test.js       ← capturas a varios tamaños y prueba de interacción
-trazos/              ← biblioteca de trazos (imágenes por técnica)
+TEXTURES/            ← imágenes de trazos, una carpeta por técnica
   AGUADAS/ GUACHE/ LAPIZ/ OLEO/ CERAS/
 dist/                ← paquete .ccx listo para instalar
 ```
