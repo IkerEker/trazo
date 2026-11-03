@@ -1,0 +1,182 @@
+"use strict";
+/*
+ * Trazo · Lápiz (grafito o lápiz de color)
+ * Rayado que sigue el campo de direcciones. Los trazos se colocan hasta que
+ * la oscuridad acumulada alcanza el tono de la foto; en las sombras se
+ * añaden capas cruzadas. Al final, contornos sobre los bordes fuertes.
+ */
+const C = require("./core.js");
+const S = require("./strokes.js");
+
+async function paint(ctx, p, clock) {
+  const { W, H, N, s, aw, ah } = ctx;
+  const colorMode = !!p.color;
+  const rand = C.mulberry32(ctx.seed * 13 + 3);
+
+  /* ----- tono objetivo (oscuridad 0..1) a resolución de análisis ----- */
+  const n = aw * ah;
+  const tone = new Float32Array(n);
+  for (let i = 0; i < n; i++) tone[i] = 1 - ctx.lum[i];
+  const blur = Float32Array.from(tone);
+  C.gaussBlur(blur, aw, ah, Math.max(2, 18 * s / ctx.fa));
+  const lift = (1 - p.cobertura) * 0.32;
+  for (let i = 0; i < n; i++) {
+    let t = tone[i] + (tone[i] - blur[i]) * 0.7; // contraste local
+    t = C.smoothstep(0.04, 0.97, t);
+    t = Math.pow(t, 1.45) * 0.85;
+    t = Math.max(0, (t - lift) / (1 - lift));
+    tone[i] = t * ctx.cover[i];
+  }
+  ctx.tone = tone;
+
+  const D = new Float32Array(N); // oscuridad acumulada
+  let Tr = null, Tg = null, Tb = null;
+  if (colorMode) { Tr = new Float32Array(N).fill(1); Tg = new Float32Array(N).fill(1); Tb = new Float32Array(N).fill(1); }
+
+  const raster = new S.StrokeRaster(W, H);
+  const path = new S.StrokePath();
+  const grain = C.makeGrainTile(ctx.seed + 3, "fine");
+  const gsInv = 1 / Math.max(1, Math.sqrt(s) * 0.8);
+  const col = new Float32Array(3), tmpc = new Float32Array(3);
+
+  const R = (0.35 + p.grosor * 2.4) * s;
+  const L = (10 + p.longitud * 80) * s;
+  const press = 0.22 + 0.62 * p.intensidad;
+  // 4 pasadas de rayado: cada una oscurece hasta un tope; "cruzado" abre el ángulo entre ellas
+  const nPass = 4;
+  const cz = p.cruzado;
+  const angles = [0, 0.1 + 0.85 * cz, -(0.08 + 0.8 * cz), 0.05 + 0.4 * cz];
+  const caps = [0.38, 0.58, 0.78, 1];
+  const ths = [0, 0.3, 0.5, 0.68];
+  const varH = p.varTono * 0.5, varS = p.varSat * 0.6;
+  const sel = ctx.sel, selDetail = ctx.selMode === "detalle";
+
+  const totalStages = nPass + 1;
+
+  async function hatchPass(j, isContour) {
+    const Rj = isContour ? R * 0.85 : R * (j === 0 ? 1 : 0.92);
+    const sp = isContour ? Math.max(1, R * 3.2) : Math.max(1.0, R * 2.6 + 0.4 * s, L * 0.12);
+    const cols = Math.ceil(W / sp), rows = Math.ceil(H / sp);
+    const edgeThr = 0.42 - 0.3 * p.detalle;
+    let cnt = 0, cap = 1 << 16;
+    let cx = new Float32Array(cap), cy = new Float32Array(cap);
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        const x = (gx + rand()) * sp, y = (gy + rand()) * sp;
+        if (x >= W || y >= H) continue;
+        if (isContour) {
+          let e = ctx.at(ctx.edgeRaw, x, y);
+          if (selDetail && sel) e += ctx.at(sel, x, y) * 0.25;
+          if (e < edgeThr || rand() > ctx.at(ctx.cover, x, y)) continue;
+        } else {
+          const t = ctx.at(tone, x, y);
+          if (t <= ths[j] + 0.02) continue;
+        }
+        if (cnt >= cap) {
+          cap *= 2;
+          const nx = new Float32Array(cap); nx.set(cx); cx = nx;
+          const ny = new Float32Array(cap); ny.set(cy); cy = ny;
+        }
+        cx[cnt] = x; cy[cnt] = y; cnt++;
+      }
+      if ((gy & 31) === 0) await clock.tick((j + 0.1 * gy / rows) / totalStages);
+    }
+    const order = new Int32Array(cnt);
+    for (let i = 0; i < cnt; i++) order[i] = i;
+    S.shuffle(order, cnt, rand);
+    const level = ctx.levelFor(Math.max(1, R * 3));
+
+    for (let oi = 0; oi < cnt; oi++) {
+      const ci = order[oi];
+      const x = cx[ci], y = cy[ci];
+      const g0 = (y | 0) * W + (x | 0);
+      const t = ctx.at(tone, x, y);
+      let target;
+      if (isContour) target = Math.min(1, t * 0.6 + 0.5);
+      else target = Math.min(t, caps[j]);
+      if (D[g0] >= target - 0.04) continue;
+
+      ctx.colorAt(level, x, y, col);
+      tmpc[0] = col[0]; tmpc[1] = col[1]; tmpc[2] = col[2];
+      let lenMul = isContour ? 0.45 : 1;
+      if (selDetail && sel) lenMul *= 1 - 0.4 * ctx.at(sel, x, y);
+      S.traceStroke(ctx, path, x, y, {
+        R: Rj, Lmax: L * lenMul * (0.55 + rand() * 0.9), step: Math.max(0.8, Rj * 2 + 1.5 * s),
+        curv: isContour ? 0.95 : (j === 0 ? 0.05 + 0.9 * p.curvatura : 0.05 + 0.45 * p.curvatura),
+        colorTol: isContour ? 0.45 : 0.55 - 0.25 * p.detalle, color: tmpc, level,
+        angle: isContour ? 0 : angles[j] + (rand() - 0.5) * 0.12,
+        minLen: Rj * 6, fine: isContour,
+      });
+      if (!isContour) S.wobblePath(path, Rj * 0.6, Rj * 40, rand() * 6.28);
+      const nP = path.n, len = path.len || 1;
+      for (let i = 0; i < nP; i++) {
+        const u = path.ss[i] / len;
+        path.rs[i] = Rj * (0.35 + 0.65 * Math.sqrt(Math.sin(Math.max(0.0001, u) * Math.PI)));
+      }
+      const nt = raster.rasterize(path, 0.4);
+      if (nt === 0) continue;
+
+      const pr = press * (isContour ? 0.75 + 0.4 * ctx.at(ctx.edgeRaw, x, y) : 0.45 + 0.4 * t) * (0.8 + rand() * 0.4);
+      const lo = 1 - pr - 0.28, hi = 1 - pr + 0.12;
+      let cr = 0, cg = 0, cb = 0;
+      if (colorMode) {
+        // lápiz de color: color de la foto, algo más saturado; los contornos más oscuros
+        const y0 = 0.299 * col[0] + 0.587 * col[1] + 0.114 * col[2];
+        for (let c = 0; c < 3; c++) col[c] = C.clamp(y0 + (col[c] - y0) * 1.35, 0, 1);
+        C.varyColor(col[0], col[1], col[2], (rand() - 0.5) * 2 * varH, (rand() - 0.5) * 2 * varS, 0, col);
+        const dk = isContour ? 0.45 : 0.85;
+        cr = col[0] * dk; cg = col[1] * dk; cb = col[2] * dk;
+      }
+      const A = raster.A, tl = raster.tl, tg = raster.tg;
+      for (let tt = 0; tt < nt; tt++) {
+        const li = tl[tt], g = tg[tt];
+        const xx = g % W, yy = (g / W) | 0;
+        const gr = C.tileAt(grain, xx * gsInv, yy * gsInv);
+        const dep = 0.22 + 0.78 * C.smoothstep(lo, hi, gr);
+        const a = A[li] * dep * pr;
+        if (a < 0.003) continue;
+        if (colorMode) {
+          const tr = 1 - a * (1 - cr), tgv = 1 - a * (1 - cg), tb = 1 - a * (1 - cb);
+          Tr[g] *= tr; Tg[g] *= tgv; Tb[g] *= tb;
+          D[g] = 1 - (0.299 * Tr[g] + 0.587 * Tg[g] + 0.114 * Tb[g]);
+        } else {
+          D[g] += a * (1 - D[g]) * 0.7;
+        }
+      }
+      raster.clear();
+      if ((oi & 31) === 0) await clock.tick((j + 0.1 + 0.9 * oi / cnt) / totalStages);
+    }
+  }
+
+  for (let j = 0; j < nPass; j++) await hatchPass(j, false);
+  if (p.detalle > 0.02) await hatchPass(nPass, true);
+
+  /* ----- salida ----- */
+  const out = new Uint8Array(N * 4);
+  const selFull = ctx.selFull, data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
+  const gr0 = 0.12, gg0 = 0.12, gb0 = 0.14; // grafito
+  for (let i = 0; i < N; i++) {
+    const o = i * 4;
+    let a, r, g, b;
+    if (colorMode) {
+      const tr = Tr[i], tgv = Tg[i], tb = Tb[i];
+      a = Math.max(1 - tr, 1 - tgv, 1 - tb);
+      if (a < 0.004) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 0; continue; }
+      r = 1 - (1 - tr) / a; g = 1 - (1 - tgv) / a; b = 1 - (1 - tb) / a;
+    } else {
+      a = D[i];
+      if (a < 0.004) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 0; continue; }
+      r = gr0; g = gg0; b = gb0;
+    }
+    if (selFull) a *= selFull[i] / 255;
+    if (srcA) a *= data[i * comp + 3] / 255;
+    out[o] = C.clamp(r, 0, 1) * 255 + 0.5 | 0;
+    out[o + 1] = C.clamp(g, 0, 1) * 255 + 0.5 | 0;
+    out[o + 2] = C.clamp(b, 0, 1) * 255 + 0.5 | 0;
+    out[o + 3] = C.clamp(a, 0, 1) * 255 + 0.5 | 0;
+    if ((i & 0x3ffff) === 0) await clock.tick(nPass / totalStages);
+  }
+  return out;
+}
+
+module.exports = { paint };

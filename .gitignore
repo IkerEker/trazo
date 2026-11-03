@@ -1,0 +1,21 @@
+# Salidas de pruebas e imágenes de prueba locales (no se publican)
+tools/out/
+tools/img/
+docs/
+
+# Paquetes generados (se crean con tools/package.sh)
+dist/*.zip
+
+# Plugin de captura por escáner: aparcado, no se publica por ahora
+captura/
+tools/mock-captura.js
+tools/captura_test.js
+tools/make_icons_captura.py
+tools/rasterize_icons_captura.js
+tools/icons-src/captura-*.svg
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+node_modules/

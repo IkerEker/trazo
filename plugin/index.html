@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Trazo</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app" class="app">
+
+    <!-- Columna de vista previa (arriba en paneles estrechos, a la izquierda en anchos) -->
+    <div class="col-preview" id="colPreview">
+      <header class="top">
+        <div class="brand">
+          <img class="brand-mark" src="icons/mark.svg" alt="">
+          <div class="brand-text">
+            <div class="brand-name">Trazo</div>
+            <div class="brand-sub" id="srcLabel">Sin documento abierto</div>
+          </div>
+        </div>
+        <div class="iconbtn" id="btnRefresh" title="Volver a leer la imagen de Photoshop"><img src="icons/refresh.svg" alt=""></div>
+      </header>
+
+      <section class="preview" id="preview">
+        <div class="pv-frame" id="pvFrame">
+          <img id="pvImg" class="pv-img" alt="">
+          <div class="pv-empty" id="pvEmpty">
+            <img src="icons/image.svg" alt="">
+            <div class="pv-empty-text" id="pvEmptyText">Abre una imagen en Photoshop</div>
+          </div>
+        </div>
+        <div class="pv-progress"><div class="pv-progress-fill" id="pvProgress"></div></div>
+        <div class="pv-bar">
+          <div class="pv-status" id="pvStatus">Vista previa</div>
+          <div class="seg seg-sm" id="pvMode">
+            <div class="seg-item on" id="pvAfter" title="Ver el resultado">Después</div>
+            <div class="seg-item" id="pvBefore" title="Ver la imagen original">Antes</div>
+          </div>
+          <div class="iconbtn sm" id="pvToggle" title="Mostrar u ocultar la vista previa"><img id="pvToggleIcon" src="icons/chevron-up.svg" alt=""></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Columna de controles -->
+    <div class="col-controls" id="colControls">
+      <nav class="tabs" id="tabs">
+        <div class="tab on" id="tab-tecnica"><span class="tab-num">1</span><span>Técnica</span></div>
+        <div class="tab" id="tab-ajustes"><span class="tab-num">2</span><span>Ajustes</span></div>
+        <div class="tab" id="tab-salida"><span class="tab-num">3</span><span>Salida</span></div>
+      </nav>
+
+      <main class="content" id="content">
+        <!-- 1 · Técnica -->
+        <div class="page" id="page-tecnica">
+          <div class="techs" id="techs"></div>
+          <div class="tech-desc" id="techDesc"></div>
+
+          <div class="section-title">PRESETS</div>
+          <div class="chips" id="presets"></div>
+          <div class="save-row">
+            <input type="text" id="presetName" class="field" placeholder="Nombre del preset">
+            <div class="btn ghost" id="btnSavePreset">Guardar</div>
+          </div>
+          <div class="hint">Guarda los ajustes actuales de la técnica como preset propio. Mantén pulsado un preset propio 1 s para borrarlo.</div>
+        </div>
+
+        <!-- 2 · Ajustes -->
+        <div class="page hidden" id="page-ajustes">
+          <div id="sliders"></div>
+          <div class="row-end">
+            <div class="btn ghost" id="btnReset">Restablecer valores</div>
+          </div>
+          <div class="hint">Doble clic sobre un control para volver a su valor por defecto.</div>
+        </div>
+
+        <!-- 3 · Salida -->
+        <div class="page hidden" id="page-salida">
+          <div class="section-title">CALIDAD</div>
+          <div class="seg seg-block" id="segQuality">
+            <div class="seg-item" id="q-borrador">Borrador</div>
+            <div class="seg-item on" id="q-alta">Alta</div>
+            <div class="seg-item" id="q-maxima">Máxima</div>
+          </div>
+          <div class="hint" id="qualityHint"></div>
+
+          <div class="section-title">SELECCIÓN ACTIVA</div>
+          <div class="seg seg-block" id="segSelection">
+            <div class="seg-item on" id="sel-ignorar">Ignorar</div>
+            <div class="seg-item" id="sel-solo">Solo dentro</div>
+            <div class="seg-item" id="sel-detalle">Más detalle</div>
+          </div>
+          <div class="hint" id="selectionHint"></div>
+
+          <div class="section-title">CAPAS</div>
+          <div class="toggle-row" id="optPaper">
+            <div class="toggle-text"><div class="toggle-label">Capa de papel / lienzo</div><div class="toggle-sub">Se crea debajo; la pintura sigue siendo transparente</div></div>
+            <div class="switch on"><div class="knob"></div></div>
+          </div>
+          <div class="toggle-row" id="optHide">
+            <div class="toggle-text"><div class="toggle-label">Ocultar la capa original</div><div class="toggle-sub">La original no se modifica nunca</div></div>
+            <div class="switch on"><div class="knob"></div></div>
+          </div>
+
+          <div class="section-title">VARIACIÓN</div>
+          <div class="seed-row">
+            <div class="seed-text">Semilla <span class="seed-val" id="seedVal">1</span></div>
+            <div class="btn ghost" id="btnSeed"><img src="icons/dice.svg" alt=""><span>Otra variación</span></div>
+          </div>
+          <div class="hint">Misma semilla y mismos ajustes = mismo resultado.</div>
+
+          <div class="section-title">EXPORTAR</div>
+          <div class="btn ghost wide" id="btnExport"><img src="icons/download.svg" alt=""><span>Exportar última pintura como PNG</span></div>
+          <div class="hint">PNG con transparencia: lo no pintado queda transparente.</div>
+        </div>
+      </main>
+
+      <footer class="foot">
+        <div class="foot-status">
+          <div class="status" id="status">Listo</div>
+          <div class="status-tech" id="statusTech"></div>
+        </div>
+        <div class="progress"><div class="progress-fill" id="progress"></div></div>
+        <div class="btn primary big" id="btnGenerate"><img src="icons/brush-dark.svg" alt="" id="genIcon"><span id="genLabel">GENERAR</span></div>
+      </footer>
+    </div>
+  </div>
+
+  <script src="js/engine.js"></script>
+  <script src="js/ps.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
