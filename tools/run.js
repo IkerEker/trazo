@@ -28,10 +28,20 @@ function save(file, data, w, h, fmt) {
   const paper = a.includes("--paper");
   const seedI = a.indexOf("--seed");
   const input = load(img, scale);
-  if (a.includes("--twice")) await Engine.render(input, { technique: tech, params, seed: 2 }, { yieldFn: () => Promise.resolve(), sliceMs: 1000 });
+  // trazos y soporte reales (desactivar con --procedural)
+  let library = null, support = null;
+  if (!a.includes("--procedural")) {
+    const fs = require("fs");
+    const tdir = path.join(__dirname, "..", "plugin", "textures");
+    const lf = path.join(tdir, tech + ".bin");
+    if (fs.existsSync(lf)) library = Engine.parseTexture(fs.readFileSync(lf));
+    const sf = path.join(tdir, "soporte-" + Engine.SUPPORT_FOR[tech] + ".bin");
+    if (fs.existsSync(sf)) support = Engine.parseTexture(fs.readFileSync(sf));
+  }
+  if (a.includes("--twice")) await Engine.render(input, { technique: tech, params, seed: 2, library, support }, { yieldFn: () => Promise.resolve(), sliceMs: 1000 });
   const t0 = Date.now();
   let lastLabel = "", lastT = t0;
-  const res = await Engine.render(input, { technique: tech, params, seed: seedI >= 0 ? +a[seedI + 1] : 1, paper }, {
+  const res = await Engine.render(input, { technique: tech, params, seed: seedI >= 0 ? +a[seedI + 1] : 1, paper, library, support }, {
     onProgress: (f, label) => {
       if (label !== lastLabel) { const now = Date.now(); if (lastLabel) process.stderr.write(`  ${lastLabel}: ${now - lastT} ms\n`); lastLabel = label; lastT = now; }
     },

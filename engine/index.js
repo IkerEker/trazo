@@ -19,6 +19,10 @@ const Painter = require("./painter.js");
 const Pencil = require("./pencil.js");
 const Water = require("./watercolor.js");
 const Paper = require("./paper.js");
+const Lib = require("./library.js");
+
+// soporte real de cada técnica (archivo textures/soporte-<tipo>.bin)
+const SUPPORT_FOR = { oleo: "lienzo", gouache: "acuarela", acuarela: "acuarela", lapiz: "dibujo", ceras: "dibujo" };
 
 function flowOptions(tech, p) {
   switch (tech) {
@@ -36,6 +40,9 @@ async function render(input, opts, hooks) {
   const clock = C.makeClock(hooks);
   const seed = (opts.seed | 0) || 1;
   const ctx = new Context(input, { seed });
+  // trazos y soporte reales (opcionales: sin ellos se usa el modelo procedural)
+  ctx.lib = opts.library && opts.library.kind === "strokes" ? opts.library : null;
+  ctx.paperPrep = opts.support ? Lib.preparePaper(opts.support) : null;
 
   clock.stage(0, 0.06, "Analizando la imagen");
   await ctx.buildBase(clock);
@@ -61,7 +68,7 @@ async function render(input, opts, hooks) {
   let paper = null;
   if (opts.paper) {
     clock.stage(0.9, 0.98, "Preparando el papel");
-    paper = await Paper.makePaper(tech, ctx.W, ctx.H, seed, clock);
+    paper = await Paper.makePaper(tech, ctx.W, ctx.H, seed, clock, ctx.paperPrep);
   }
   clock.stage(1, 1, "Listo");
   return { paint, paper, width: ctx.W, height: ctx.H };
@@ -81,4 +88,7 @@ function flatten(paint, paper, W, H, out) {
   return out;
 }
 
-module.exports = { render, flatten, Techniques: T, CancelError: C.CancelError };
+module.exports = {
+  render, flatten, Techniques: T, CancelError: C.CancelError,
+  parseTexture: Lib.parse, SUPPORT_FOR,
+};

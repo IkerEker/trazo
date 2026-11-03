@@ -9,6 +9,7 @@
  */
 const C = require("./core.js");
 const S = require("./strokes.js");
+const Lib = require("./library.js");
 
 /** Kuwahara generalizado con tablas de sumas (O(n) por radio). */
 function kuwahara(r, g, b, w, h, rad) {
@@ -123,7 +124,10 @@ async function paint(ctx, p, clock) {
 
   /* ----- 4) marcas de pincel (modulan la densidad) ----- */
   const Dn = new Float32Array(N);
-  if (p.longitud > 0.01) {
+  const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : null;
+  if (lib) {
+    await realWashes(ctx, p, lib, Dn, rand, clock);
+  } else if (p.longitud > 0.01) {
     const raster = new S.StrokeRaster(W, H);
     const path = new S.StrokePath();
     const R = (2.5 + p.grosor * 15) * s;
@@ -169,6 +173,10 @@ async function paint(ctx, p, clock) {
   /* ----- 5) composición a resolución completa ----- */
   const grain = C.makeGrainTile(ctx.seed + 21, "rough");
   const gsInv = 1 / Math.max(1, Math.sqrt(s) * 2.0);
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  // con aguadas reales: una aguada base más clara + veladuras que aportan el resto del pigmento
+  const glaze = !!lib;
+  const gk = 0.85 * (0.55 + 0.5 * p.intensidad);
   const amp = (0.8 + p.humedad * 3.5) * s; // ondulación de los bordes (px)
   const edgeDark = 0.45 + 0.6 * p.detalle;
   const turbK = 0.22 + 0.18 * p.humedad;
@@ -194,19 +202,25 @@ async function paint(ctx, p, clock) {
       const e = C.bilinear(E, aw, ah, sx, sy);
       const m = C.bilinear(cover, aw, ah, sx, sy);
       const tu = C.bilinear(turbN, gw, gh, gx4, gy4);
-      const gr = C.tileAt(grain, x * gsInv, y * gsInv);
+      const gr = pap ? pap.eq(x, y) : C.tileAt(grain, x * gsInv, y * gsInv);
+      const c0r = r, c0g = g, c0b = b;
       const lumv = 0.299 * r + 0.587 * g + 0.114 * b;
       // densidad de pigmento
       let d = (1 + edgeDark * e * e * 1.2) *
               (1 + turbK * (tu - 0.5) * 2) *
               (1 + granK * (gr - 0.5) * (0.4 + (1 - lumv))) *
-              (1 + brushK * (Dn[i] - 0.2)) *
+              (glaze ? 1 : 1 + brushK * (Dn[i] - 0.2)) *
               (1 + 1.1 * 4 * m * (1 - m) * (m < 0.98 ? 1 : 0)); // borde de la mancha al reservar blancos
       const k = d - 1;
       r = r - (r - r * r) * k; g = g - (g - g * g) * k; b = b - (b - b * b) * k;
       // intensidad del pigmento y reserva del papel
-      const pm = pig * m;
+      const pm = pig * m * (glaze ? 0.72 : 1);
       r = 1 - (1 - r) * pm; g = 1 - (1 - g) * pm; b = 1 - (1 - b) * pm;
+      if (glaze && Dn[i] > 0.001) {
+        // veladuras transparentes: cada aguada absorbe según su color (se oscurecen al superponerse)
+        const dg = (1 - Math.exp(-Dn[i] * 1.1)) * gk * m; // las veladuras se saturan: no oscurecen sin límite
+        r *= Math.exp(-(1 - c0r) * dg); g *= Math.exp(-(1 - c0g) * dg); b *= Math.exp(-(1 - c0b) * dg);
+      }
       r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
       // papel blanco → transparente
       let a = Math.max(1 - r, 1 - g, 1 - b);
@@ -222,6 +236,63 @@ async function paint(ctx, p, clock) {
     if ((y & 15) === 0) await clock.tick(0.7 + 0.3 * y / H);
   }
   return out;
+}
+
+/**
+ * Aguadas reales: cada pincelada es una muestra escaneada (borde de pigmento,
+ * floraciones, granulado) que se acumula como densidad de veladura.
+ * Dos pasadas: toda la imagen y luego refuerzo en las zonas oscuras.
+ */
+async function realWashes(ctx, p, lib, Dn, rand, clock) {
+  const { W, H, s } = ctx;
+  const raster = new S.StrokeRaster(W, H);
+  const path = new S.StrokePath();
+  const col = new Float32Array(3);
+  const ts = new Float32Array(2);
+  const R0 = (6 + p.grosor * 26) * s;
+  const passes = [
+    { R: R0, sp: 1.9, minDark: 0.06, prob: 0.9, str: 0.8 },
+    { R: R0 * 0.62, sp: 2.2, minDark: 0.42, prob: 0.8, str: 0.75 },
+  ];
+  for (let pi = 0; pi < passes.length; pi++) {
+    const P = passes[pi];
+    const R = P.R, Rr = R / 0.7;
+    const L = R * 2 * (1.4 + p.longitud * 6);
+    const sp = R * P.sp;
+    const cols = Math.ceil(W / sp), rows = Math.ceil(H / sp);
+    const level = ctx.levelFor(R);
+    const total = cols * rows;
+    let done = 0;
+    for (let gy = 0; gy < rows; gy++) for (let gx = 0; gx < cols; gx++) {
+      done++;
+      const x = (gx + rand()) * sp, y = (gy + rand()) * sp;
+      if (x >= W || y >= H) continue;
+      if (rand() > ctx.at(ctx.cover, x, y) * P.prob) continue;
+      ctx.colorAt(level, x, y, col);
+      const dark = 1 - (0.299 * col[0] + 0.587 * col[1] + 0.114 * col[2]);
+      if (dark < P.minDark) continue;
+      if (rand() > 0.35 + 0.9 * dark) continue; // zonas claras: más aguada base y papel
+      S.traceStroke(ctx, path, x, y, {
+        R, Lmax: L * (0.55 + rand() * 0.8), step: Math.max(1, R * 0.8), curv: 0.1 + 0.85 * p.curvatura,
+        colorTol: 0.55, color: col, level, angle: (rand() - 0.5) * 0.3, minLen: R * 1.5,
+      });
+      S.wobblePath(path, R * 0.08, R * 8, rand() * 6.28);
+      for (let i = 0; i < path.n; i++) path.rs[i] = Rr * 0.9;
+      const nt = raster.rasterize(path, 0.04);
+      if (nt === 0) continue;
+      const st = Lib.prepare(lib[(rand() * lib.length) | 0], path.len || 1, Rr, rand, 0.9);
+      const str = P.str * (0.75 + 0.5 * rand());
+      const A = raster.A, U = raster.U, V = raster.V, tl = raster.tl, tg = raster.tg;
+      for (let t = 0; t < nt; t++) {
+        const li = tl[t], g = tg[t];
+        Lib.sampleAt(st, U[li], V[li], ts);
+        const add = ts[0] * A[li] * str;
+        if (add > 0.003) Dn[g] += add * (1 - Dn[g] * 0.25);
+      }
+      raster.clear();
+      if ((done & 31) === 0) await clock.tick(0.4 + 0.3 * (pi + done / total) / passes.length);
+    }
+  }
 }
 
 module.exports = { paint, kuwahara };

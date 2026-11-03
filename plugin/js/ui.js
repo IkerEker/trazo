@@ -77,6 +77,50 @@
     }, 300);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* trazos y soportes reales (plugin/textures/*.bin)                    */
+  /* ------------------------------------------------------------------ */
+  const texCache = {};
+  async function readPluginBinary(rel) {
+    try {
+      const uxp = require("uxp");
+      const st = uxp && uxp.storage;
+      if (st && st.localFileSystem && st.localFileSystem.getPluginFolder) {
+        const folder = await st.localFileSystem.getPluginFolder();
+        const file = await folder.getEntry(rel);
+        return await file.read({ format: st.formats.binary });
+      }
+    } catch (e) { /* probamos con fetch */ }
+    try {
+      const r = await fetch(rel);
+      if (r.ok) return await r.arrayBuffer();
+    } catch (e) { /* sin textura */ }
+    return null;
+  }
+  function loadTexture(name) {
+    if (!texCache[name]) {
+      texCache[name] = readPluginBinary("textures/" + name + ".bin").then((buf) => {
+        try { return buf ? Engine.parseTexture(buf) : null; } catch (e) { return null; }
+      });
+    }
+    return texCache[name];
+  }
+  /** Biblioteca de trazos y soporte de la técnica. Si faltan, el motor usa su modelo procedural. */
+  async function texturesFor(tech) {
+    const [library, support] = await Promise.all([
+      loadTexture(tech),
+      loadTexture("soporte-" + (Engine.SUPPORT_FOR[tech] || "dibujo")),
+    ]);
+    return { library, support };
+  }
+  async function showTexInfo() {
+    const tech = state.tech;
+    const t = await texturesFor(tech);
+    if (tech !== state.tech) return;
+    const n = t.library && t.library.samples ? t.library.samples.length : 0;
+    $("statusTech").textContent = techDef().name + (n ? " · " + n + " trazos reales" : "");
+  }
+
   const cur = () => state.params[state.tech];
   const techDef = () => T.BY_ID[state.tech];
 
@@ -147,6 +191,7 @@
     }
     $("techDesc").textContent = techDef().desc + ".";
     $("statusTech").textContent = techDef().name;
+    showTexInfo();
   }
   function selectTech(id) {
     if (!T.BY_ID[id] || id === state.tech) return;
@@ -473,9 +518,11 @@
         if (mask) selection = { mask, mode: state.selMode };
       }
       if (my !== pvToken) return;
+      const tex = await texturesFor(state.tech);
+      if (my !== pvToken) return;
       const res = await Engine.render(
         { width: src.width, height: src.height, data: src.data, components: src.components },
-        { technique: state.tech, params: cur(), seed: state.seed, selection, paper: state.paper },
+        { technique: state.tech, params: cur(), seed: state.seed, selection, paper: state.paper, library: tex.library, support: tex.support },
         { onProgress: (f) => { if (my === pvToken) setPvProgress(f); }, shouldCancel: () => my !== pvToken, sliceMs: 24 }
       );
       if (my !== pvToken) return;
@@ -638,9 +685,10 @@
           const mask = await PS.readSelection(t, s.width, s.height);
           if (mask) selection = { mask, mode: state.selMode };
         }
+        const tex = await texturesFor(def.id);
         const res = await Engine.render(
           { width: s.width, height: s.height, data: s.data, components: s.components },
-          { technique: def.id, params, seed, selection, paper: state.paper },
+          { technique: def.id, params, seed, selection, paper: state.paper, library: tex.library, support: tex.support },
           { onProgress: (f, label) => report(0.04 + f * 0.86, label), shouldCancel: cancelled, sliceMs: 60 }
         );
         if (cancelled()) throw new Engine.CancelError();

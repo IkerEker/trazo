@@ -10,6 +10,10 @@
  */
 const C = require("./core.js");
 const S = require("./strokes.js");
+const Lib = require("./library.js");
+
+const BODY = 0.7; // fracción del ancho de la textura que ocupa el cuerpo del trazo
+const VK = 0.9;   // se rasteriza el 90 % central del ancho (el borde exterior está vacío)
 
 const NB = 32; // cerdas por pincel
 
@@ -24,21 +28,23 @@ function kindConfig(kind, p, s) {
       dry: 0.55 + 0.4 * p.intensidad, thick: p.empaste, sat: 1.1,
       tol: 0.42 - 0.22 * p.detalle, refineT: 0.14 - 0.09 * p.detalle,
       needCov: 0.7, gloss: 0.3, shade: 1.0, canvasTex: 0.5, under: 0.9,
+      sK: 0.75 + 0.9 * p.empaste, paperDep: 0, dual: 0.6,
     };
   }
   if (kind === "gouache") {
     const R0 = (1.8 + p.grosor * 17) * s;
     return {
       R0, layers: 1 + Math.round(p.detalle * 3), ratio: 0.5, minR: 0.8,
-      Lk: 2 * (1.0 + p.longitud * 5.5), spacing: 1.0, soft: 0.1,
+      Lk: 2 * (1.6 + p.longitud * 6.5), spacing: 1.0, soft: 0.1,
       opacity: 0.8 + 0.2 * p.intensidad, streak: 0.12, wet: 0.06,
       dry: 0.6 + 0.3 * p.intensidad, thick: p.empaste * 0.45, sat: 1.04,
       tol: 0.36 - 0.2 * p.detalle, refineT: 0.12 - 0.08 * p.detalle,
       needCov: 0.85, gloss: 0.0, shade: 0.7, palette: 0.5, canvasTex: 0.35, under: 1.0,
+      sK: 0.7 + 0.6 * p.empaste, paperDep: 0, dual: 0.45,
     };
   }
   // ceras
-  const R0 = (1.0 + p.grosor * 6.5) * s;
+  const R0 = (2.4 + p.grosor * 12) * s;
   return {
     R0, layers: 2 + Math.round(p.detalle * 1.4), ratio: 0.72, minR: 0.6,
     Lk: 2 * (2.5 + p.longitud * 12), spacing: 1.9, soft: 0.35,
@@ -46,6 +52,7 @@ function kindConfig(kind, p, s) {
     dry: 0.7, thick: p.empaste * 0.6, sat: 1.22,
     tol: 0.5 - 0.22 * p.detalle, refineT: 0.18 - 0.1 * p.detalle,
     needCov: 0.8, gloss: 0.12, shade: 0.6, canvasTex: 0.0, under: 0,
+    sK: 0.85 + 0.6 * p.empaste, paperDep: 0.5, dual: 0.5,
   };
 }
 
@@ -132,6 +139,12 @@ async function paint(ctx, kind, p, clock) {
   const col = new Float32Array(3);
   const tmpc = new Float32Array(3);
   const bris = new Float32Array(NB);
+  // trazos reales (si hay biblioteca) y soporte real a escala física
+  const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const ts = new Float32Array(2);
+  const col2 = new Float32Array(3);
+  const stripes = new Float32Array(64);
 
   const varH = p.varTono * 0.42, varS = p.varSat * 0.55, varL = p.varLuz * 0.26;
 
@@ -218,7 +231,7 @@ async function paint(ctx, kind, p, clock) {
       // trayectoria
       S.traceStroke(ctx, path, x, y, {
         R: Rk, Lmax: L * (0.6 + rand() * 0.8), step, curv: 0.08 + 0.9 * p.curvatura,
-        colorTol: tolK, color: tmpc, level, angle: angle + (kind === "ceras" ? (rand() - 0.5) * 0.25 : 0),
+        colorTol: tolK, color: tmpc, level, angle: angle + (rand() - 0.5) * (kind === "ceras" ? 0.25 : lib ? 0.3 : 0),
         minLen: Rk * (kind === "ceras" ? 3 : 1.2), fine: k >= 2 && Rk < 6 * s,
       });
       if (kind === "ceras") S.wobblePath(path, Rk * (0.3 + 0.9 * p.curvatura), Rk * (10 + rand() * 12), rand() * 6.28);
@@ -226,6 +239,65 @@ async function paint(ctx, kind, p, clock) {
       // perfil de anchura
       const n = path.n, len = path.len || 1;
       const rs = path.rs;
+      if (lib) {
+        // con trazos reales la forma la da la muestra: área rasterizada constante
+        const Rr = Rk / BODY, Rq = Rr * VK;
+        for (let i = 0; i < n; i++) rs[i] = Rq;
+        const ntl = raster.rasterize(path, 0.04);
+        if (ntl === 0) continue;
+        const smp = lib[(rand() * lib.length) | 0];
+        const st = Lib.prepare(smp, len, Rr, rand, VK);
+        const op = cfg.opacity * (kind === "ceras" ? 1 : (0.88 + rand() * 0.12));
+        const thick = cfg.thick * (0.7 + rand() * 0.6);
+        const cr = col[0], cg = col[1], cb = col[2];
+        const sK = cfg.sK, wet = cfg.wet, pdep = cfg.paperDep;
+        // pincel cargado con dos tonos: vetas finas a lo largo de las cerdas
+        const vlum = 0.4 + p.varLuz + p.varTono * 0.6;
+        const mixAmt = Math.min(0.9, cfg.dual * vlum * (0.4 + 0.6 * rand()));
+        C.varyColor(cr, cg, cb, (rand() - 0.5) * 0.5 * (0.3 + p.varTono), (rand() - 0.5) * 0.5,
+          (rand() < 0.5 ? -1 : 1) * (0.07 + 0.12 * rand()), col2);
+        const c2r = col2[0], c2g = col2[1], c2b = col2[2];
+        let ph = rand() * 6.28, fr1 = 5 + rand() * 9, fr2 = 13 + rand() * 17;
+        for (let q = 0; q < 64; q++) {
+          const z = q / 63;
+          const w = 0.55 * Math.sin(z * fr1 + ph) + 0.45 * Math.sin(z * fr2 + ph * 1.7) + (rand() - 0.5) * 0.5;
+          stripes[q] = C.smoothstep(0.05, 0.7, w);
+        }
+        const A = raster.A, U = raster.U, V = raster.V, tl = raster.tl, tg = raster.tg;
+        for (let t = 0; t < ntl; t++) {
+          const li = tl[t], g = tg[t];
+          const u = U[li];
+          Lib.sampleAt(st, u, V[li], ts);
+          let a = ts[0] * op * A[li];
+          if (pdep > 0 && pap && a > 0.004) {
+            // las ceras se quedan en los picos del papel (siempre el mismo grano)
+            const x = g % W, y = (g / W) | 0;
+            a *= 1 - pdep + pdep * C.smoothstep(0.2, 0.7, pap.eqN(x, y));
+          }
+          if (a < 0.004) continue;
+          // detalle de la muestra: menos en los bordes (cobertura parcial) y sombras suaves
+          let sv = ts[1] * sK * C.smoothstep(0.3, 0.9, ts[0]);
+          if (sv < 0) sv *= 0.7;
+          const vv = V[li];
+          const mz = stripes[((vv + 1) * 31.5) | 0] * mixAmt;
+          const br = cr + (c2r - cr) * mz, bgc = cg + (c2g - cg) * mz, bbc = cb + (c2b - cb) * mz;
+          let r, gg, bb;
+          if (sv < 0) { const f = 1 + (sv < -0.9 ? -0.9 : sv); r = br * f; gg = bgc * f; bb = bbc * f; }
+          else { const f = sv > 1 ? 0.85 : sv * 0.85; r = br + (1 - br) * f; gg = bgc + (1 - bgc) * f; bb = bbc + (1 - bbc) * f; }
+          const cv = Cv[g];
+          if (wet > 0 && cv > 0.05) {
+            const m = wet * (0.2 + 0.8 * (u < 0 ? 0 : u > 1 ? 1 : u)) * cv, inv = 1 / cv;
+            r += (Pr[g] * inv - r) * m; gg += (Pg[g] * inv - gg) * m; bb += (Pb[g] * inv - bb) * m;
+          }
+          const ia = 1 - a;
+          Pr[g] = Pr[g] * ia + r * a; Pg[g] = Pg[g] * ia + gg * a; Pb[g] = Pb[g] * ia + bb * a;
+          Cv[g] = cv * ia + a;
+          if (Hh) Hh[g] = Hh[g] * (1 - a * 0.85) + a * thick * (0.45 + 0.55 * ts[0] + 0.5 * ts[1]);
+        }
+        raster.clear();
+        if ((oi & 15) === 0) await clock.tick((k + 0.1 + 0.9 * oi / cnt) / nL);
+        continue;
+      }
       for (let i = 0; i < n; i++) {
         const u = path.ss[i] / len;
         let prof;
@@ -334,7 +406,7 @@ async function paint(ctx, kind, p, clock) {
       if ((oi & 15) === 0) await clock.tick((k + 0.1 + 0.9 * oi / cnt) / nL);
     }
   }
-  return { Pr, Pg, Pb, Cv, Hh, cfg, grain, gsInv };
+  return { Pr, Pg, Pb, Cv, Hh, cfg, grain, gsInv, real: !!lib, pap };
 }
 
 /**
@@ -342,14 +414,28 @@ async function paint(ctx, kind, p, clock) {
  */
 async function finish(ctx, kind, p, planes, clock) {
   const { W, H, N, s } = ctx;
-  const { Pr, Pg, Pb, Cv, Hh, cfg, grain } = planes;
+  const { Pr, Pg, Pb, Cv, Hh, cfg, grain, pap } = planes;
   const out = new Uint8Array(N * 4);
   let weave = null, wInv = 1;
-  if (Hh && cfg.canvasTex > 0) {
+  if (Hh && cfg.canvasTex > 0 && pap) {
+    // lienzo / papel real: la trama asoma donde la pintura es fina
+    const tmp0 = new Float32Array(N);
+    const rb0 = Math.max(1, Math.round(0.9 * Math.sqrt(s)));
+    C.boxBlurH(Hh, tmp0, W, H, rb0); C.boxBlurV(tmp0, Hh, W, H, rb0);
+    C.boxBlurH(Hh, tmp0, W, H, 1); C.boxBlurV(tmp0, Hh, W, H, 1);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        const thin = 1 - Math.min(1, Hh[i] * 1.2);
+        Hh[i] += (0.5 + pap.raw(x, y) * 1.6) * cfg.canvasTex * (0.12 + 0.4 * thin);
+      }
+      if ((y & 63) === 0) await clock.tick(y / H * 0.3);
+    }
+  } else if (Hh && cfg.canvasTex > 0) {
     weave = C.makeGrainTile(ctx.seed + 9, kind === "oleo" ? "canvas" : "paper");
     wInv = 1 / Math.max(1, Math.sqrt(s) * (kind === "oleo" ? 1.0 : 1.6));
   }
-  if (Hh) {
+  if (Hh && !(cfg.canvasTex > 0 && pap)) {
     // suavizado ligero del relieve
     const tmp = new Float32Array(N);
     const rb = Math.max(1, Math.round(0.6 * Math.sqrt(s)));
@@ -370,7 +456,7 @@ async function finish(ctx, kind, p, planes, clock) {
   let lx = -0.55, ly = -0.65, lz = 0.52;
   const lm = Math.sqrt(lx * lx + ly * ly + lz * lz);
   lx /= lm; ly /= lm; lz /= lm;
-  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s));
+  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1);
   const gloss = cfg.gloss * (0.3 + p.empaste);
   const selFull = ctx.selFull;
   const data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;

@@ -7,12 +7,14 @@
  */
 const C = require("./core.js");
 const S = require("./strokes.js");
+const Lib = require("./library.js");
 
 async function paint(ctx, p, clock) {
   const { W, H, N, s, aw, ah } = ctx;
   const colorMode = !!p.color;
   const rand = C.mulberry32(ctx.seed * 13 + 3);
 
+  const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : null;
   /* ----- tono objetivo (oscuridad 0..1) a resolución de análisis ----- */
   const n = aw * ah;
   const tone = new Float32Array(n);
@@ -23,7 +25,7 @@ async function paint(ctx, p, clock) {
   for (let i = 0; i < n; i++) {
     let t = tone[i] + (tone[i] - blur[i]) * 0.7; // contraste local
     t = C.smoothstep(0.04, 0.97, t);
-    t = Math.pow(t, 1.45) * 0.85;
+    t = Math.pow(t, 1.45) * (lib ? 0.8 : 0.85);
     t = Math.max(0, (t - lift) / (1 - lift));
     tone[i] = t * ctx.cover[i];
   }
@@ -39,8 +41,12 @@ async function paint(ctx, p, clock) {
   const gsInv = 1 / Math.max(1, Math.sqrt(s) * 0.8);
   const col = new Float32Array(3), tmpc = new Float32Array(3);
 
-  const R = (0.35 + p.grosor * 2.4) * s;
-  const L = (10 + p.longitud * 80) * s;
+  // trazos reales de grafito/carbón: los más ligeros para las primeras pasadas
+  const libLight = lib ? lib.filter((m) => m.fill < 0.62) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const ts = new Float32Array(2);
+  const R = lib ? (2.4 + p.grosor * 13) * s : (0.35 + p.grosor * 2.4) * s;
+  const L = lib ? (14 + p.longitud * 95) * s : (10 + p.longitud * 80) * s;
   const press = 0.22 + 0.62 * p.intensidad;
   // 4 pasadas de rayado: cada una oscurece hasta un tope; "cruzado" abre el ángulo entre ellas
   const nPass = 4;
@@ -54,8 +60,11 @@ async function paint(ctx, p, clock) {
   const totalStages = nPass + 1;
 
   async function hatchPass(j, isContour) {
-    const Rj = isContour ? R * 0.85 : R * (j === 0 ? 1 : 0.92);
-    const sp = isContour ? Math.max(1, R * 3.2) : Math.max(1.0, R * 2.6 + 0.4 * s, L * 0.12);
+    const Rj = isContour ? (lib ? Math.max(0.45, (0.32 + p.grosor * 1.4) * s) : R * 0.85) : R * (j === 0 ? 1 : 0.92);
+    const useLib = lib && !isContour;
+    const pool = useLib ? (j < 2 && libLight.length ? libLight : lib) : null;
+    const Rc = lib ? Math.max(0.45, (0.32 + p.grosor * 1.4) * s) : R; // contornos: línea fina
+    const sp = isContour ? Math.max(1, Rc * 3.2) : lib ? Math.max(1.0, R * 1.3, L * 0.16) : Math.max(1.0, R * 2.6 + 0.4 * s, L * 0.12);
     const cols = Math.ceil(W / sp), rows = Math.ceil(H / sp);
     const edgeThr = 0.42 - 0.3 * p.detalle;
     let cnt = 0, cap = 1 << 16;
@@ -107,13 +116,20 @@ async function paint(ctx, p, clock) {
         angle: isContour ? 0 : angles[j] + (rand() - 0.5) * 0.12,
         minLen: Rj * 6, fine: isContour,
       });
-      if (!isContour) S.wobblePath(path, Rj * 0.6, Rj * 40, rand() * 6.28);
+      if (!isContour) S.wobblePath(path, useLib ? Rj * 0.12 : Rj * 0.6, Rj * (useLib ? 12 : 40), rand() * 6.28);
       const nP = path.n, len = path.len || 1;
-      for (let i = 0; i < nP; i++) {
-        const u = path.ss[i] / len;
-        path.rs[i] = Rj * (0.35 + 0.65 * Math.sqrt(Math.sin(Math.max(0.0001, u) * Math.PI)));
+      let st = null;
+      if (useLib) {
+        const Rr = Rj / 0.7;
+        for (let i = 0; i < nP; i++) path.rs[i] = Rr * 0.9;
+        st = Lib.prepare(pool[(rand() * pool.length) | 0], len, Rr, rand, 0.9);
+      } else {
+        for (let i = 0; i < nP; i++) {
+          const u = path.ss[i] / len;
+          path.rs[i] = Rj * (0.35 + 0.65 * Math.sqrt(Math.sin(Math.max(0.0001, u) * Math.PI)));
+        }
       }
-      const nt = raster.rasterize(path, 0.4);
+      const nt = raster.rasterize(path, useLib ? 0.04 : 0.4);
       if (nt === 0) continue;
 
       const pr = press * (isContour ? 0.75 + 0.4 * ctx.at(ctx.edgeRaw, x, y) : 0.45 + 0.4 * t) * (0.8 + rand() * 0.4);
@@ -127,13 +143,23 @@ async function paint(ctx, p, clock) {
         const dk = isContour ? 0.45 : 0.85;
         cr = col[0] * dk; cg = col[1] * dk; cb = col[2] * dk;
       }
-      const A = raster.A, tl = raster.tl, tg = raster.tg;
+      const A = raster.A, tl = raster.tl, tg = raster.tg, U = raster.U, V = raster.V;
+      const prL = useLib ? pr * 0.85 : pr;
+      const prC = lib && isContour ? 0.62 : 1; // contornos más ligeros sobre grafito real
       for (let tt = 0; tt < nt; tt++) {
         const li = tl[tt], g = tg[tt];
         const xx = g % W, yy = (g / W) | 0;
-        const gr = C.tileAt(grain, xx * gsInv, yy * gsInv);
-        const dep = 0.22 + 0.78 * C.smoothstep(lo, hi, gr);
-        const a = A[li] * dep * pr;
+        let a;
+        if (useLib) {
+          // grafito real de la muestra + el diente del papel (siempre el mismo)
+          Lib.sampleAt(st, U[li], V[li], ts);
+          const tooth = pap ? 0.55 + 0.45 * C.smoothstep(0.15, 0.75, pap.eqN(xx, yy)) : 1;
+          a = ts[0] * A[li] * prL * tooth;
+        } else {
+          const gr = pap ? pap.eq(xx, yy) : C.tileAt(grain, xx * gsInv, yy * gsInv);
+          const dep = 0.22 + 0.78 * C.smoothstep(lo, hi, gr);
+          a = A[li] * dep * pr * prC;
+        }
         if (a < 0.003) continue;
         if (colorMode) {
           const tr = 1 - a * (1 - cr), tgv = 1 - a * (1 - cg), tb = 1 - a * (1 - cb);
