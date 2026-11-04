@@ -35,8 +35,8 @@ const SUPPORT_FOR = {
   mixtalg: "dibujo", xilografia: "dibujo",
 };
 const ASSETS_FOR = {
-  oleo: ["pin_oleo", "pin_gouache"],
-  gouache: ["pin_gouache"],
+  oleo: ["pin_oleo", "pin_gouache", "manchas", "tiles_pintura"],
+  gouache: ["pin_gouache", "manchas", "tiles_pintura"],
   acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz", "ov_goteos"],
   lapiz: ["pin_lapiz", "pin_cera", "ov_grafito", "ov_carbon"],
   ceras: ["pin_barra", "pin_manley", "pin_pastel"],
@@ -54,10 +54,10 @@ function flowOptions(tech, p) {
   switch (tech) {
     case "lapiz": case "mixtalg": return { flowSigma: 8 + p.grosor * 8, baseAngle: -Math.PI / 4, wander: 0.2, bias: 0.15, localBias: 0.35 };
     case "acuarela": return { flowSigma: 6 + p.grosor * 14, baseAngle: 0, wander: 0.6, bias: 0.1, localBias: 0.1 };
-    case "ceras": return { flowSigma: 6 + p.grosor * 14, baseAngle: -Math.PI / 4, wander: 0.4, bias: 0.12, localBias: 0.15 };
+    case "ceras": return { flowSigma: 6 + p.grosor * 12, baseAngle: -Math.PI / 4, wander: 0.15, bias: 0.1, localBias: 0.12, propagate: true };
     case "xilografia": return { flowSigma: 6 + p.grosor * 10, baseAngle: 0, wander: 0.3, bias: 0.1, localBias: 0.15 };
-    case "gouache": return { flowSigma: 4 + p.grosor * 16, baseAngle: 0, wander: 0.55, bias: 0.08, localBias: 0.08 };
-    default: return { flowSigma: 3 + p.grosor * 15, baseAngle: 0, wander: 0.5, bias: 0.08, localBias: 0.06 };
+    case "gouache": return { flowSigma: 4 + p.grosor * 14, baseAngle: 0, wander: 0.15, bias: 0.1, localBias: 0.08, propagate: true };
+    default: return { flowSigma: 3 + p.grosor * 13, baseAngle: 0, wander: 0.15, bias: 0.1, localBias: 0.06, propagate: true };
   }
 }
 

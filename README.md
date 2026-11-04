@@ -23,8 +23,10 @@ puede cambiar de variante sin perder los valores.
 - **Pinceladas** (~180): óleo, gouache, lápiz, cera y carbón, óleo en barra, cera escolar, pastel y acuarela.
   Se doblan a lo largo de cada recorrido y conservan la carga inicial, las cerdas, el final seco
   y el relieve. Las de `REALISTAS` tienen prioridad.
-- **Manchas** (22): manchas sueltas de gouache en la mixta lápiz + gouache.
-- **Texturas repetibles**: aguadas y granulado para la acuarela, a escala física y giradas.
+- **Manchas** (22): las grandes cubren con formas reales las zonas amplias del óleo y el gouache;
+  también dan las manchas sueltas de la mixta lápiz + gouache.
+- **Texturas repetibles** (50): frotados cálidos, fríos y grises bajo el óleo y el gouache;
+  aguadas y granulado para la acuarela. A escala física y giradas con la forma.
 - **Texturas 9:16** (con poco peso): ruido de impresión y veta de madera (xilografía), goteos
   (acuarela), grafito y carbón (lápiz).
 - **Papel y lienzo**: su grano se marca siempre en las zonas veladas, esté o no visible el papel.
@@ -120,11 +122,11 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 
 | Técnica | 5 MP (3000×1688) |
 |---|---|
-| Óleo | 6,1 s |
+| Óleo | 7,8 s |
 | Lápiz | 6,8 s |
-| Gouache | 6,4 s |
+| Gouache | 8,2 s |
 | Acuarela | 6,3 s |
-| Ceras | 8,5–11 s |
+| Ceras | 9–11 s |
 | Mixta L+G | 8,9 s |
 | Xilografía | 3,2 s |
 
@@ -149,10 +151,20 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      (transformada de dominio). Cada píxel de la franja de transición de un borde toma el color
      de su lado, como cuando un pintor decide dónde acaba la forma. El pincel nunca coge colores
      intermedios, así que no hay halos ni perfiles alrededor de las formas.
-   - **Encaje:** una capa fina de color con el borde roto, sin desenfoque.
-   - **Capas de pincel:** de 3 a 4 tamaños. El pincel grande cubre todo. Los siguientes solo
-     pintan donde el color pintado aún no es el de la referencia (bordes y detalle). Cada
-     pincelada sigue la forma y se detiene al llegar a otro color.
+   - **Encaje:** una capa fina de color con el borde roto y la textura de un frotado real
+     (`TEXTURAS REALISTAS TILEABLES`, cálida o fría según la zona y girada con la forma).
+   - **Formas:** las zonas amplias de un mismo color se cubren con manchas reales de varios
+     trazos (`MANCHAS GRANDES DE VARIOS TRAZOS`) de tamaños muy distintos, orientadas con la
+     forma y sin invadir otros colores. Encima solo van algunas pinceladas.
+   - **Direcciones:** salen siempre de la foto. En las zonas lisas se heredan de la estructura
+     que las rodea; nunca se cruzan pinceladas al azar.
+   - **Capas de pincel:** de 2 a 4 tamaños, y dentro de cada uno anchos y largos muy distintos
+     (unas pocas pinceladas muy largas donde la forma tiene una dirección clara, muchas cortas).
+     El pincel grande cubre lo que no cubren las formas; los siguientes solo pintan donde el
+     color pintado aún no es el de la referencia. Cada pincelada se detiene al llegar a otro color.
+   - **Carga y empaste:** cada pincelada empieza cargada y se queda seca al final (se abre en
+     vetas de cerdas); el tono es algo más hondo donde hay más pintura. El empaste cambia de un
+     trazo a otro: frotados finos, pinceladas normales y algunas muy cargadas.
    - **Filo del pincel:** cada pincelada se recorta contra los cambios de color con un filo
      propio, que ondula a lo largo y se deshilacha con las cerdas. Los bordes quedan rotos,
      nunca redondeados ni con líneas oscuras.

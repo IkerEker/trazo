@@ -146,6 +146,16 @@ class Context {
     C.gaussBlur(jyy, aw, ah, sig, tmp);
     await clock.tick(0.6);
 
+    // direcciones heredadas: en las zonas planas manda la estructura que las rodea
+    // (tensor muy suavizado), no una dirección inventada
+    let Lxx = null, Lxy = null, Lyy = null, lowT = 0, highT = 0;
+    if (opts.propagate) {
+      Lxx = Float32Array.from(jxx); Lxy = Float32Array.from(jxy); Lyy = Float32Array.from(jyy);
+      const sigL = sig * 4;
+      C.gaussBlur(Lxx, aw, ah, sigL, tmp); C.gaussBlur(Lxy, aw, ah, sigL, tmp); C.gaussBlur(Lyy, aw, ah, sigL, tmp);
+      C.gaussBlur(Lxx, aw, ah, sigL, tmp); C.gaussBlur(Lxy, aw, ah, sigL, tmp); C.gaussBlur(Lyy, aw, ah, sigL, tmp);
+      lowT = 0.01 * mean; highT = 0.12 * mean;
+    }
     // sesgo hacia una dirección por defecto (zonas planas: cielo, agua…)
     const base = opts.baseAngle || 0;
     const wander = opts.wander === undefined ? 0.45 : opts.wander;
@@ -169,7 +179,16 @@ class Context {
           co = Math.sqrt(dd * dd + 4 * jxy[i] * jxy[i]) / tr; // coherencia 0..1
         }
         const e = eps + localK * tr * (1 - co) * (1 - co);
-        const Jxx = jxx[i] + e * gxx * gxx, Jxy = jxy[i] + e * gxx * gyy, Jyy = jyy[i] + e * gyy * gyy;
+        let Jxx, Jxy, Jyy;
+        if (Lxx) {
+          // la dirección de fondo sale de la estructura cercana; solo si no hay ninguna, de la mano
+          const tl = Lxx[i] + Lyy[i];
+          const cL = C.smoothstep(lowT, highT, tl), iL = tl > 1e-12 ? cL / tl : 0;
+          const bx = (Lxx[i] * iL + gxx * gxx * (1 - cL)), bxy = (Lxy[i] * iL + gxx * gyy * (1 - cL)), by = (Lyy[i] * iL + gyy * gyy * (1 - cL));
+          Jxx = jxx[i] + e * bx; Jxy = jxy[i] + e * bxy; Jyy = jyy[i] + e * by;
+        } else {
+          Jxx = jxx[i] + e * gxx * gxx; Jxy = jxy[i] + e * gxx * gyy; Jyy = jyy[i] + e * gyy * gyy;
+        }
         // ángulo doble del gradiente dominante; la tangente es perpendicular → signo invertido
         const cc = Jxx - Jyy, ss = 2 * Jxy;
         const mag = Math.sqrt(cc * cc + ss * ss) + 1e-12;
