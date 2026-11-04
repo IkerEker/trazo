@@ -498,11 +498,11 @@ async function finish(ctx, kind, p, planes, clock) {
         const dif = (ndl - lz) * 1.15;
         const k = 1 + dif;
         r *= k; g *= k; b *= k;
-        if (gloss > 0) {
+        if (gloss > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
           const rv = 2 * ndl * nz - lz;
           if (rv > 0.6) {
             let sp = (rv - 0.6) / 0.4; sp = sp * sp; sp = sp * sp; sp = sp * sp;
-            const add = sp * gloss;
+            const add = sp * gloss * (cfg.glossByHeight ? C.smoothstep(0.08, 0.6, Hh[i]) : 1);
             r += add; g += add; b += add;
           }
         }

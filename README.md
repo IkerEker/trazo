@@ -5,7 +5,14 @@ Analiza la imagen para decidir la dirección de cada trazo (siguen bordes y form
 aleatorios) y crea la pintura en una **capa nueva con transparencia**: lo que no se pinta
 queda transparente, y el papel o el lienzo va en una capa aparte.
 
-**Novedad en 1.1: pinta con trazos reales.** Cada pincelada es una muestra real (87 trazos
+**Novedad en 1.2: pinta como un pintor.** Primero ve la imagen en *manchas* (zonas de
+color con su degradado) y las cubre con pintura plana o casi plana. Después coloca
+pinceladas decididas que siguen la forma y nunca se salen de su mancha: si una pincelada no
+cabe entera, no se pinta, así que no hay puntitos. La pasta gruesa va solo en las luces y
+las sombras quedan finas. La acuarela se pinta con aguadas superpuestas de claro a oscuro,
+con bordes húmedos, floraciones, pigmento acumulado al secar y granulado.
+
+**Desde 1.1: pinta con trazos reales.** Cada pincelada es una muestra real (87 trazos
 separados de las imágenes de `TEXTURES/`) que se dobla a lo largo del recorrido. Conserva su
 forma, la carga inicial, las vetas de las cerdas, el final seco y el relieve. El papel y el
 lienzo también son reales: se sacan del fondo de esas imágenes.
@@ -21,7 +28,7 @@ lienzo también son reales: se sacan del fondo de esas imágenes.
 **Requisitos:** Photoshop 2024 (v25.0) o posterior y un documento en modo **RGB** de 8 o 16 bits.
 
 ### Opción A · Doble clic (recomendada para usar)
-1. Haz doble clic en `dist/Trazo-1.1.0.ccx`. Creative Cloud lo instala.
+1. Haz doble clic en `dist/Trazo-1.2.0.ccx`. Creative Cloud lo instala.
 2. En Photoshop: **Plugins › Trazo · Pintura tradicional**.
 
 > El `.ccx` no está firmado por Adobe Marketplace, así que Creative Cloud puede avisar de que
@@ -89,14 +96,14 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 
 | Técnica | Borrador (1,5 MP) | Alta (6 MP) |
 |---|---|---|
-| Lápiz | 3,0 s | 7,9 s |
-| Óleo | 3,3 s | 9,6 s |
-| Gouache | 2,9 s | 8,1 s |
-| Ceras | 3,9 s | 12,0 s |
-| Acuarela | 3,1 s | 7,7 s |
+| Lápiz | 3,3 s | 5,9 s |
+| Óleo | 2,8 s | 6,1 s |
+| Gouache | 2,9 s | 5,8 s |
+| Ceras | 2,8 s | 5,8 s |
+| Acuarela | 4,5 s | 6,0 s |
 
-Pintar con trazos reales tarda aproximadamente el doble que el modelo procedural de la 1.0.
-La vista previa del panel tarda alrededor de 1 s. Durante GENERAR, Photoshop muestra su barra
+La vista previa del panel tarda alrededor de 1 s. A 6 MP el motor usa unos 300–450 MB de
+memoria; en calidad Máxima (16 MP) puede pasar de 1 GB. Durante GENERAR, Photoshop muestra su barra
 de progreso y se puede cancelar desde ahí o desde el propio botón.
 
 ---
@@ -107,23 +114,38 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    direcciones. Uno es suave, para el relleno; el otro es fino, para contornos y detalle. En
    zonas sin dirección clara (cielo, follaje) los trazos adoptan una dirección regular, como
    haría un pintor.
-2. **Pintura por capas de pincel** (Óleo, Gouache, Ceras): primero pinceles grandes y luego
-   más finos solo donde falta detalle. Cada trazo sigue el campo de direcciones y se detiene
-   al cruzar un cambio de color.
+2. **Manchas** (`segment.js`): superpíxeles SLIC sobre la imagen suavizada. Las zonas vecinas
+   se fusionan mientras su color siga siendo un único degradado; en las zonas poco
+   importantes se simplifica más. Cada mancha guarda su degradado de color, su textura, su
+   orientación, su importancia y su anchura.
+3. **Óleo, Gouache y Ceras** (`painter2.js`), en este orden:
+   - **Mancha:** pintura plana con bordes orgánicos. Los bordes se pierden en el fondo y
+     quedan nítidos en lo importante.
+   - **Frotado:** pasadas anchas y finas que dan textura de pincel a las zonas planas.
+   - **Modelado:** pinceladas largas dentro de cada mancha, más donde hay textura.
+   - **Contorno:** pinceladas que recorren el borde de cada forma.
+   - **Acentos:** pasta gruesa en las luces importantes.
    - Cada pincelada es un **trazo real**. Cabeza, cuerpo y cola se mapean sobre el recorrido:
      el cuerpo se recorta o se repite según la longitud, y la carga inicial y el final seco
      se conservan.
    - El pincel va **cargado con dos tonos**, que forman vetas siguiendo las cerdas.
    - La pintura recoge el color que hay debajo (mezcla húmeda).
    - El relieve de la muestra da el brillo del empaste.
-3. **Lápiz**: el sombreado se hace con trazos reales de grafito y carbón (los más ligeros en
+4. **Lápiz**: difumino en las zonas lisas y rayado con una dirección coherente en cada zona
+   (sigue la forma o va en diagonal de mano). El sombreado se hace con trazos reales de grafito y carbón (los más ligeros en
    las primeras pasadas) y se acumula hasta igualar el tono de la foto. Encima van contornos
    finos sobre el diente del papel real.
-4. **Acuarela**: una aguada base hecha por abstracción (Kuwahara, sangrado húmedo, bordes de
+5. **Acuarela** (`watercolor2.js`): de dos a cuatro aguadas según lo oscura que sea cada
+   mancha. Las primeras, húmedas, tienen bordes suaves, flecos y floraciones, y sus colores
+   se funden en los bordes. Las últimas, en seco, tienen bordes nítidos. Al secar, el
+   pigmento se acumula en el borde y granula en los valles del papel. Las formas claras se
+   respetan pintando alrededor. Cada aguada absorbe según su color (se mezclan por
+   superposición). Las pinceladas reales aportan textura donde la foto la tiene. (Hasta la
+   1.1: una aguada base hecha por abstracción (Kuwahara, sangrado húmedo, bordes de
    pigmento, granulado). Encima van **veladuras con aguadas reales**, más en las zonas oscuras,
    que oscurecen de forma limitada al superponerse. El papel blanco se convierte en
-   transparencia.
-5. **Soporte real a escala física**: se supone un cuadro de unos 30 cm, así que el grano y la
+   transparencia.)
+6. **Soporte real a escala física**: se supone un cuadro de unos 30 cm, así que el grano y la
    trama se ven como en un original. Si faltan las texturas, el motor usa su modelo procedural
    de la 1.0.
 
@@ -145,7 +167,10 @@ engine/              ← código fuente del motor (módulos)
   core.js            ← desenfoques, ruido, muestreo, textura de papel
   analysis.js        ← campo de direcciones, bordes, cobertura, pirámide de color
   strokes.js         ← trazado y rasterizado de pinceladas
-  painter.js         ← Óleo, Gouache, Ceras
+  segment.js         ← manchas: SLIC, fusión por degradado, contornos, etiquetas
+  painter2.js        ← Óleo, Gouache, Ceras (mancha + pinceladas con intención)
+  watercolor2.js     ← Acuarela por aguadas superpuestas
+  painter.js         ← acabado (relieve, brillo, lienzo) y motor 1.1 de respaldo
   pencil.js          ← Lápiz
   watercolor.js      ← Acuarela
   paper.js           ← papel y lienzo

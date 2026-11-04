@@ -20,6 +20,9 @@ const Pencil = require("./pencil.js");
 const Water = require("./watercolor.js");
 const Paper = require("./paper.js");
 const Lib = require("./library.js");
+const Seg = require("./segment.js");
+const Painter2 = require("./painter2.js");
+const Water2 = require("./watercolor2.js");
 
 // soporte real de cada técnica (archivo textures/soporte-<tipo>.bin)
 const SUPPORT_FOR = { oleo: "lienzo", gouache: "acuarela", acuarela: "acuarela", lapiz: "dibujo", ceras: "dibujo" };
@@ -53,11 +56,31 @@ async function render(input, opts, hooks) {
 
   let paint;
   if (tech === "lapiz") {
-    clock.stage(0.14, opts.paper ? 0.9 : 0.98, "Dibujando");
-    paint = await Pencil.paint(ctx, p, clock);
+    clock.stage(0.14, 0.24, "Viendo la imagen en zonas");
+    const seg = opts.legacy ? null : await Seg.segment(ctx, { detail: 0.3 + 0.6 * p.detalle }, clock);
+    const Lfull = seg ? await Seg.fullLabels(ctx, seg, clock) : null;
+    clock.stage(0.24, opts.paper ? 0.9 : 0.98, "Dibujando");
+    paint = await Pencil.paint(ctx, p, clock, seg, Lfull);
+  } else if (tech === "acuarela" && !opts.legacy) {
+    clock.stage(0.14, 0.26, "Viendo la imagen en manchas");
+    const seg = await Seg.segment(ctx, { detail: 0.3 + 0.6 * p.detalle }, clock);
+    clock.stage(0.26, 0.32, "Ajustando los bordes");
+    const Lfull = await Seg.fullLabels(ctx, seg, clock);
+    clock.stage(0.32, opts.paper ? 0.9 : 0.98, "Pintando aguadas");
+    paint = await Water2.paint(ctx, p, seg, Lfull, clock);
   } else if (tech === "acuarela") {
     clock.stage(0.14, opts.paper ? 0.9 : 0.98, "Pintando acuarela");
     paint = await Water.paint(ctx, p, clock);
+  } else if (!opts.legacy) {
+    // óleo, gouache y ceras: mancha + pinceladas con intención
+    clock.stage(0.14, 0.24, "Viendo la imagen en manchas");
+    const seg = await Seg.segment(ctx, { detail: 0.25 + 0.7 * p.detalle }, clock);
+    clock.stage(0.24, 0.3, "Ajustando los bordes");
+    const Lfull = await Seg.fullLabels(ctx, seg, clock);
+    clock.stage(0.3, 0.84, "Pintando");
+    const planes = await Painter2.paint(ctx, tech, p, seg, Lfull, clock);
+    clock.stage(0.84, opts.paper ? 0.9 : 0.98, "Acabado");
+    paint = await Painter.finish(ctx, tech, p, planes, clock);
   } else {
     clock.stage(0.14, 0.8, "Pintando");
     const planes = await Painter.paint(ctx, tech, p, clock);

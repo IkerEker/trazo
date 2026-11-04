@@ -41,7 +41,7 @@ function save(file, data, w, h, fmt) {
   if (a.includes("--twice")) await Engine.render(input, { technique: tech, params, seed: 2, library, support }, { yieldFn: () => Promise.resolve(), sliceMs: 1000 });
   const t0 = Date.now();
   let lastLabel = "", lastT = t0;
-  const res = await Engine.render(input, { technique: tech, params, seed: seedI >= 0 ? +a[seedI + 1] : 1, paper, library, support }, {
+  const res = await Engine.render(input, { technique: tech, params, seed: seedI >= 0 ? +a[seedI + 1] : 1, paper, library, support, legacy: a.includes("--legacy") }, {
     onProgress: (f, label) => {
       if (label !== lastLabel) { const now = Date.now(); if (lastLabel) process.stderr.write(`  ${lastLabel}: ${now - lastT} ms\n`); lastLabel = label; lastT = now; }
     },

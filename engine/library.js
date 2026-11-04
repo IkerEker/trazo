@@ -216,4 +216,33 @@ function paperScale(longSide) {
   return 10 / Math.max(0.05, pxPerMm);
 }
 
-module.exports = { parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };
+/** Pinceladas sintéticas (respaldo si faltan las texturas reales). */
+const _synth = {};
+function synthetic(kind) {
+  if (_synth[kind]) return _synth[kind];
+  const out = [];
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  for (let k = 0; k < 6; k++) {
+    const w = 64, h = 384, A = new Uint8Array(w * h), Sx = new Uint8Array(w * h);
+    const br = new Float32Array(w);
+    let prev = rnd();
+    for (let x = 0; x < w; x++) { prev = prev * 0.5 + rnd() * 0.5; br[x] = prev; }
+    const top = 18, bottom = h - 20, tail = Math.round(h * (0.6 + 0.2 * rnd()));
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const v = (x - (w - 1) / 2) / ((w - 1) / 2);
+      const edge = 0.7 + 0.06 * Math.sin(y * 0.11 + k) + 0.04 * (rnd() - 0.5);
+      let a = Math.abs(v) < edge ? 1 : Math.max(0, 1 - (Math.abs(v) - edge) * 12);
+      if (y < top) a *= Math.max(0, 1 - (top - y) / 8);
+      if (y > tail) { const t = (y - tail) / Math.max(1, bottom - tail); a *= br[x] > t ? 1 : Math.max(0, 1 - (t - br[x]) * 6); }
+      if (y > bottom) a = 0;
+      A[y * w + x] = Math.round(a * 255);
+      Sx[y * w + x] = Math.round(128 + (br[x] - 0.5) * 40 * a);
+    }
+    out.push({ w, h, top, head: top + 24, tail, bottom, fill: 0.8, aspect: h / w, A, S: kind === "lapiz" || kind === "acuarela" ? null : Sx, mips: null });
+  }
+  _synth[kind] = out;
+  return out;
+}
+
+module.exports = { synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };

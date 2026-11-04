@@ -9,7 +9,7 @@ const C = require("./core.js");
 const S = require("./strokes.js");
 const Lib = require("./library.js");
 
-async function paint(ctx, p, clock) {
+async function paint(ctx, p, clock, seg, Lfull) {
   const { W, H, N, s, aw, ah } = ctx;
   const colorMode = !!p.color;
   const rand = C.mulberry32(ctx.seed * 13 + 3);
@@ -32,6 +32,34 @@ async function paint(ctx, p, clock) {
   ctx.tone = tone;
 
   const D = new Float32Array(N); // oscuridad acumulada
+  /* ----- difumino: tono base suave en las zonas lisas (piel, cielo, paredes) ----- */
+  const regAng = seg ? new Float32Array(seg.reg.n) : null;
+  if (seg && Lfull) {
+    const reg = seg.reg;
+    const papS = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+    const smK = new Float32Array(reg.n);
+    const rA = C.mulberry32(ctx.seed * 5 + 1);
+    for (let r = 0; r < reg.n; r++) {
+      smK[r] = Math.pow(1 - reg.act[r], 1.4) * (0.45 + 0.35 * (1 - reg.imp[r] * 0.5));
+      // dirección del rayado de la zona: sigue la forma si es clara; si no, diagonal de mano
+      const th = 0.5 * Math.atan2(reg.os[r], reg.oc[r]);
+      regAng[r] = reg.coh[r] > 0.45 ? th : -Math.PI / 4 + (rA() - 0.5) * 0.5;
+    }
+    // tono suavizado a resolución de análisis
+    const tb = Float32Array.from(tone);
+    C.gaussBlur(tb, aw, ah, Math.max(1.5, 4 * s / ctx.fa));
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        const k = smK[Lfull[i]];
+        if (k < 0.02) continue;
+        const t = ctx.at(tb, x, y);
+        const g = papS ? papS.eq(x, y) : 0.5;
+        D[i] = Math.min(0.6, t * k) * (0.72 + 0.45 * (g - 0.5) + 0.28);
+      }
+      if ((y & 63) === 0) await clock.tick(0);
+    }
+  }
   let Tr = null, Tg = null, Tb = null;
   if (colorMode) { Tr = new Float32Array(N).fill(1); Tg = new Float32Array(N).fill(1); Tb = new Float32Array(N).fill(1); }
 
@@ -58,6 +86,16 @@ async function paint(ctx, p, clock) {
   const sel = ctx.sel, selDetail = ctx.selMode === "detalle";
 
   const totalStages = nPass + 1;
+
+  // ángulo para que el rayado vaya en la dirección de la zona (relativo al flujo local)
+  const _fl = new Float32Array(2);
+  function hatchAngle(x, y, j) {
+    if (!regAng) return angles[j];
+    const r = Lfull[(y | 0) * W + (x | 0)];
+    ctx.flowAt(x, y, _fl);
+    const phi = Math.atan2(_fl[1], _fl[0]);
+    return regAng[r] - phi + angles[j];
+  }
 
   async function hatchPass(j, isContour) {
     const Rj = isContour ? (lib ? Math.max(0.45, (0.32 + p.grosor * 1.4) * s) : R * 0.85) : R * (j === 0 ? 1 : 0.92);
@@ -111,9 +149,9 @@ async function paint(ctx, p, clock) {
       if (selDetail && sel) lenMul *= 1 - 0.4 * ctx.at(sel, x, y);
       S.traceStroke(ctx, path, x, y, {
         R: Rj, Lmax: L * lenMul * (0.55 + rand() * 0.9), step: Math.max(0.8, Rj * 2 + 1.5 * s),
-        curv: isContour ? 0.95 : (j === 0 ? 0.05 + 0.9 * p.curvatura : 0.05 + 0.45 * p.curvatura),
+        curv: isContour ? 0.95 : regAng ? 0.02 + 0.25 * p.curvatura : (j === 0 ? 0.05 + 0.9 * p.curvatura : 0.05 + 0.45 * p.curvatura),
         colorTol: isContour ? 0.45 : 0.55 - 0.25 * p.detalle, color: tmpc, level,
-        angle: isContour ? 0 : angles[j] + (rand() - 0.5) * 0.12,
+        angle: isContour ? 0 : hatchAngle(x, y, j) + (rand() - 0.5) * 0.1,
         minLen: Rj * 6, fine: isContour,
       });
       if (!isContour) S.wobblePath(path, useLib ? Rj * 0.12 : Rj * 0.6, Rj * (useLib ? 12 : 40), rand() * 6.28);
