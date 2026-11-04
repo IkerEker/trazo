@@ -1,4 +1,4 @@
-/*! Trazo 1.3.0 · motor de pintura (generado por tools/bundle.js, no editar) */
+/*! Trazo 1.3.1 · motor de pintura (generado por tools/bundle.js, no editar) */
 (function (root) {
 "use strict";
 const __defs = {}, __cache = {};

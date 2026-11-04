@@ -40,14 +40,24 @@ Cómo se analizó cada técnica antes de programarla: [`REFERENCIAS/ESTUDIO_TECN
 
 ## Instalación
 
-**Requisitos:** Photoshop 2024 (v25.0) o posterior y un documento en modo **RGB** de 8 o 16 bits.
+**Requisitos:** Photoshop 24.5 o posterior y un documento en modo **RGB** de 8 o 16 bits.
 
 ### Opción A · Doble clic (recomendada para usar)
-1. Haz doble clic en `dist/Trazo-1.3.0.ccx`. Creative Cloud lo instala.
+1. Haz doble clic en `dist/Trazo-1.3.1.ccx`. Creative Cloud lo instala tras avisar de que no está verificado («Instalar localmente»).
 2. En Photoshop: **Plugins › Trazo · Pintura tradicional**.
 
 > El `.ccx` no está firmado por Adobe Marketplace, así que Creative Cloud puede avisar de que
 > el plugin no está verificado. Si no deja instalarlo, usa la opción B.
+
+**Si Creative Cloud se abre pero no lo instala**, el instalador de Adobe da el motivo por línea de
+comandos. En Windows, abre *Símbolo del sistema* y ejecuta (cambia la ruta del `.ccx`):
+```
+"C:\Program Files\Common Files\Adobe\Adobe Desktop Common\RemoteComponents\UPI\UnifiedPluginInstallerAgent\UnifiedPluginInstallerAgent.exe" /install "C:\Users\TU_USUARIO\Downloads\Trazo-1.3.1.ccx"
+```
+En macOS:
+```
+"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install ~/Downloads/Trazo-1.3.1.ccx
+```
 
 ### Opción B · UXP Developer Tool (recomendada para desarrollar)
 1. Instala **UXP Developer Tool** desde Creative Cloud.
@@ -237,7 +247,7 @@ node tools/serve.js
 ```
 Con el servidor en marcha, abre `http://localhost:8765/plugin/index.html?img=faro`. El simulador lee la foto de prueba de `tools/img/faro.png`; esa carpeta no se publica, así que pon ahí tu propia imagen.
 ```bash
-./tools/package.sh
+./tools/package.sh   # node tools/bundle.js + python3 tools/package.py
 ```
 
 Los presets de fábrica y los valores por defecto están en `engine/techniques.js`. Los presets
