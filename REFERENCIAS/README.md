@@ -1,5 +1,7 @@
 # REFERENCIAS
 
+**Estudio de las técnicas:** [ESTUDIO_TECNICAS.md](ESTUDIO_TECNICAS.md)
+
 Obras reales de cada estilo, **solo para estudiarlas**. El plugin no las usa ni las incluye
 (el `.ccx` solo empaqueta la carpeta `plugin/`).
 
