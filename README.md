@@ -9,7 +9,7 @@ el lienzo va en una capa aparte (casilla **Papel**).
 |---|---|
 | Óleo | Planos y espátula · Gestual · Boceto sobre imprimatura · Matérico |
 | Lápiz (grises) | Línea suelta · Rayado · Carboncillo · Negros expresivos |
-| Gouache | Plein air · Línea y plano · Retrato expresivo · Diluido |
+| Gouache | Plein air · Planos opacos · Retrato expresivo · Diluido |
 | Acuarela | Manchas húmedas · Paisaje por capas · Con dibujo · Densa |
 | Rotulador | Moda (alcohol + línea) · Vetas de alcohol · Acuarelables · Línea y relleno |
 | Mixta L+G | Más lápiz · Equilibrada · Más gouache · Manchas sueltas |
@@ -43,7 +43,7 @@ Cómo se analizó cada técnica antes de programarla: [`REFERENCIAS/ESTUDIO_TECN
 **Requisitos:** Photoshop 24.5 o posterior y un documento en modo **RGB** de 8 o 16 bits.
 
 ### Opción A · Doble clic (recomendada para usar)
-1. Haz doble clic en `dist/Trazo-1.3.1.ccx`. Creative Cloud lo instala tras avisar de que no está verificado («Instalar localmente»).
+1. Haz doble clic en `dist/Trazo-1.4.0.ccx`. Creative Cloud lo instala tras avisar de que no está verificado («Instalar localmente»).
 2. En Photoshop: **Plugins › Trazo · Pintura tradicional**.
 
 > El `.ccx` no está firmado por Adobe Marketplace, así que Creative Cloud puede avisar de que
@@ -52,11 +52,11 @@ Cómo se analizó cada técnica antes de programarla: [`REFERENCIAS/ESTUDIO_TECN
 **Si Creative Cloud se abre pero no lo instala**, el instalador de Adobe da el motivo por línea de
 comandos. En Windows, abre *Símbolo del sistema* y ejecuta (cambia la ruta del `.ccx`):
 ```
-"C:\Program Files\Common Files\Adobe\Adobe Desktop Common\RemoteComponents\UPI\UnifiedPluginInstallerAgent\UnifiedPluginInstallerAgent.exe" /install "C:\Users\TU_USUARIO\Downloads\Trazo-1.3.1.ccx"
+"C:\Program Files\Common Files\Adobe\Adobe Desktop Common\RemoteComponents\UPI\UnifiedPluginInstallerAgent\UnifiedPluginInstallerAgent.exe" /install "C:\Users\TU_USUARIO\Downloads\Trazo-1.4.0.ccx"
 ```
 En macOS:
 ```
-"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install ~/Downloads/Trazo-1.3.1.ccx
+"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install ~/Downloads/Trazo-1.4.0.ccx
 ```
 
 ### Opción B · UXP Developer Tool (recomendada para desarrollar)
@@ -119,16 +119,16 @@ En macOS:
 ### Tiempos orientativos
 Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript (V8) que usa UXP:
 
-| Técnica | Alta (6 MP) |
+| Técnica | 5 MP (3000×1688) |
 |---|---|
-| Óleo | 7,0 s |
-| Lápiz | 4,8 s |
-| Gouache | 6,4 s |
-| Acuarela | 6,0 s |
-| Rotulador | 2,5 s |
-| Mixta L+G | 9,0 s |
-| Mixta total | 8,7 s |
-| Xilografía | 3,4 s |
+| Óleo | 9,1 s |
+| Lápiz | 6,8 s |
+| Gouache | 8,0 s |
+| Acuarela | 6,3 s |
+| Rotulador | 3,3 s |
+| Mixta L+G | 9,7 s |
+| Mixta total | 10,1 s |
+| Xilografía | 3,2 s |
 
 La vista previa del panel tarda alrededor de 1 s. A 6 MP el motor usa unos 300–450 MB de
 memoria; en calidad Máxima (16 MP) puede pasar de 1 GB. Durante GENERAR, Photoshop muestra su barra
@@ -146,19 +146,23 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    se fusionan mientras su color siga siendo un único degradado; en las zonas poco
    importantes se simplifica más. Cada mancha guarda su degradado de color, su textura, su
    orientación, su importancia y su anchura.
-3. **Óleo y Gouache** (`painter2.js`), en este orden:
-   - **Mancha:** pintura plana con bordes orgánicos. Los bordes se pierden en el fondo y
-     quedan nítidos en lo importante.
-   - **Frotado:** pasadas anchas y finas que dan textura de pincel a las zonas planas.
-   - **Modelado:** pinceladas largas dentro de cada mancha, más donde hay textura.
-   - **Contorno:** pinceladas que recorren el borde de cada forma.
-   - **Acentos:** pasta gruesa en las luces importantes.
-   - Cada pincelada es un **trazo real**. Cabeza, cuerpo y cola se mapean sobre el recorrido:
-     el cuerpo se recorta o se repite según la longitud, y la carga inicial y el final seco
-     se conservan.
-   - El pincel va **cargado con dos tonos**, que forman vetas siguiendo las cerdas.
-   - La pintura recoge el color que hay debajo (mezcla húmeda).
-   - El relieve de la muestra da el brillo del empaste.
+3. **Óleo y Gouache** (`painter3.js`), de grueso a fino, solo con pinceladas reales:
+   - **Referencia sin halos:** la foto se simplifica con un filtro que conserva los bordes
+     (transformada de dominio). Cada píxel de la franja de transición de un borde toma el color
+     de su lado, como cuando un pintor decide dónde acaba la forma. El pincel nunca coge colores
+     intermedios, así que no hay halos ni perfiles alrededor de las formas.
+   - **Encaje:** una capa fina de color con el borde roto, sin desenfoque.
+   - **Capas de pincel:** de 3 a 4 tamaños. El pincel grande cubre todo. Los siguientes solo
+     pintan donde el color pintado aún no es el de la referencia (bordes y detalle). Cada
+     pincelada sigue la forma y se detiene al llegar a otro color.
+   - **Filo del pincel:** cada pincelada se recorta contra los cambios de color con un filo
+     propio, que ondula a lo largo y se deshilacha con las cerdas. Los bordes quedan rotos,
+     nunca redondeados ni con líneas oscuras.
+   - Las pinceladas finas continúan la pintura que ya hay alrededor, sin costuras.
+   - Cada pincelada es un **trazo real** elegido con la proporción adecuada (no se estira).
+     El pincel va cargado con dos tonos y varía la temperatura entre trazos (blancos cremosos o
+     azulados). La mezcla húmeda solo se da entre colores parecidos, para no ensuciar los bordes.
+     El relieve del empaste es suave y depende de cada trazo.
 4. **Lápiz**: difumino en las zonas lisas y rayado con una dirección coherente en cada zona
    (sigue la forma o va en diagonal de mano). El sombreado se hace con trazos reales de grafito y carbón (los más ligeros en
    las primeras pasadas) y se acumula hasta igualar el tono de la foto. Encima van contornos
@@ -167,8 +171,9 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    mancha. Las primeras, húmedas, tienen bordes suaves, flecos y floraciones, y sus colores
    se funden en los bordes. Las últimas, en seco, tienen bordes nítidos. Al secar, el
    pigmento se acumula en el borde y granula en los valles del papel. Las formas claras se
-   respetan pintando alrededor. Cada aguada absorbe según su color (se mezclan por
-   superposición). Las pinceladas reales aportan textura donde la foto la tiene. (Hasta la
+   respetan pintando alrededor. El filo de cada aguada se decide a resolución completa contra
+   el grano del papel: se rompe en vez de redondearse, y en las aguadas secas queda pincel
+   seco en el borde. Cada aguada absorbe según su color (se mezclan por superposición). Las pinceladas reales aportan textura donde la foto la tiene. (Hasta la
    1.1: una aguada base hecha por abstracción (Kuwahara, sangrado húmedo, bordes de
    pigmento, granulado). Encima van **veladuras con aguadas reales**, más en las zonas oscuras,
    que oscurecen de forma limitada al superponerse. El papel blanco se convierte en
@@ -196,7 +201,7 @@ engine/              ← código fuente del motor (módulos)
   analysis.js        ← campo de direcciones, bordes, cobertura, pirámide de color
   strokes.js         ← trazado y rasterizado de pinceladas
   segment.js         ← manchas: SLIC, fusión por degradado, contornos, etiquetas
-  painter2.js        ← Óleo y Gouache (mancha + pinceladas con intención + variantes)
+  painter3.js        ← Óleo y Gouache (capas de pincel sin halos, filo roto, variantes)
   watercolor2.js     ← Acuarela por aguadas superpuestas
   painter.js         ← acabado (relieve, brillo, lienzo) y motor 1.1 de respaldo
   xilografia.js      ← cortes de gubia, estampación y planchas de color

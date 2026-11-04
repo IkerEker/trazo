@@ -15,7 +15,7 @@ const C = require("./core.js");
 const S = require("./strokes.js");
 const Lib = require("./library.js");
 const Painter = require("./painter.js");
-const Painter2 = require("./painter2.js");
+const Painter3 = require("./painter3.js");
 const Pencil = require("./pencil.js");
 const K = require("./kit.js");
 const M = require("./rotuladores.js");
@@ -23,7 +23,7 @@ const M = require("./rotuladores.js");
 /* ---------- gouache completo (RGBA) ---------- */
 async function gouacheLayer(ctx, p, seg, Lfull, clock, modo) {
   const gp = Object.assign({}, p, { modo: modo || "pleinair", cobertura: 1 });
-  const planes = await Painter2.paint(ctx, "gouache", gp, seg, Lfull, clock);
+  const planes = await Painter3.paint(ctx, "gouache", gp, seg, clock);
   return Painter.finish(ctx, "gouache", gp, planes, clock);
 }
 
@@ -52,7 +52,8 @@ async function paintLG(ctx, p, seg, Lfull, clock) {
   // 1) lápiz: rayado ligero y contornos
   const base = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta", cobertura: 0.55 + 0.3 * (1 - p.cobertura) }), tick(0, 0.3), seg, Lfull, { lib: pencilLib, only: "tono" });
   // 2) gouache
-  const gou = await gouacheLayer(ctx, Object.assign({}, p, { grosor: p.grosor * 0.9 }), seg, Lfull, tick(0.3, 0.7), "pleinair");
+  // gouache de planos: menos capas finas (el detalle lo da el lápiz)
+  const gou = await gouacheLayer(ctx, Object.assign({}, p, { grosor: p.grosor * 0.9, detalle: p.detalle * 0.35 }), seg, Lfull, tick(0.3, 0.7), "pleinair");
   // qué zonas llevan gouache: las importantes y las de color; "más lápiz" deja muchas solo a lápiz
   const cover = { maslapiz: 0.28, equilibrada: 0.55, masgouache: 0.82, manchas: 0.6 }[mode] * (0.6 + 0.6 * p.cobertura);
   // se eligen por importancia y color hasta cubrir la proporción de la variante
@@ -103,7 +104,7 @@ async function paintLG(ctx, p, seg, Lfull, clock) {
   // 3) composición: lápiz → gouache → líneas de lápiz encima (muy presentes)
   const out = base;
   K.overU8(out, gou);
-  const lines = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta" }), tick(0.75, 0.98), seg, Lfull, { lib: pencilLib, only: "contornos", contourMul: 1.25 + 0.4 * p.intensidad });
+  const lines = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta" }), tick(0.75, 0.98), seg, Lfull, { lib: pencilLib, only: "contornos", contourMul: 0.8 + 0.35 * p.intensidad });
   K.multU8(out, lines);
   return out;
 }
@@ -142,7 +143,7 @@ async function paintCollage(ctx, p, seg, Lfull, clock) {
   }
   // 1) gouache (planos) para las zonas de pintura
   const gp = Object.assign({}, p, { empaste: 0.1, varSat: mode === "cartel" ? 0.6 : p.varSat, curvatura: 0.5, humedad: 0.3, cruzado: 0.3, varLuz: 0.15 });
-  const gou = await gouacheLayer(ctx, gp, seg, Lfull, tick(0, 0.4), mode === "cartel" ? "lineaplano" : "pleinair");
+  const gou = await gouacheLayer(ctx, gp, seg, Lfull, tick(0, 0.4), mode === "cartel" ? "planos" : "pleinair");
   await clock.tick(0.4);
 
   const out = new Uint8Array(N * 4);
@@ -231,9 +232,10 @@ async function paintCollage(ctx, p, seg, Lfull, clock) {
   // 4) línea de tinta (y lápiz en cuaderno) por encima
   const ink = (ctx.strokesOf(["pin_linea"]) || { samples: Lib.synthetic("lapiz") }).samples;
   await M.drawContours(ctx, seg, Lfull, {
-    lib: ink, width: Math.max(0.9, (0.8 + 2.4 * p.grosor) * s * (mode === "cartel" ? 1.4 : 1)), opacity: 0.92,
+    lib: ink, width: Math.max(0.9, (0.8 + 2.4 * p.grosor) * s * (mode === "cartel" ? 1.3 : 1)), opacity: 0.85,
+    density: { cuaderno: 0.55, collage: 0.35, cartel: 0.5, impresion: 0.25 }[mode],
     thr: { cuaderno: 0.12, collage: 0.35, cartel: 0.25, impresion: 0.45 }[mode] - 0.12 * p.detalle, impK: 0.9,
-    segLen: (50 + 160 * p.longitud) * s, gap: 3, overshoot: 0.18,
+    segLen: (50 + 160 * p.longitud) * s, gap: 4, overshoot: 0.08,
     apply: (g, a) => { Tr[g] *= 1 - a * 0.94; Tg[g] *= 1 - a * 0.94; Tb[g] *= 1 - a * 0.93; },
   }, tick(0.72, 0.95));
   K.multU8(out, K.transToRGBA(Tr, Tg, Tb));

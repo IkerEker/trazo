@@ -420,7 +420,7 @@ async function finish(ctx, kind, p, planes, clock) {
   if (Hh && cfg.canvasTex > 0 && pap) {
     // lienzo / papel real: la trama asoma donde la pintura es fina
     const tmp0 = new Float32Array(N);
-    const rb0 = Math.max(1, Math.round(0.9 * Math.sqrt(s)));
+    const rb0 = Math.max(1, Math.round((cfg.hBlur || 0.9) * Math.sqrt(s)));
     C.boxBlurH(Hh, tmp0, W, H, rb0); C.boxBlurV(tmp0, Hh, W, H, rb0);
     C.boxBlurH(Hh, tmp0, W, H, 1); C.boxBlurV(tmp0, Hh, W, H, 1);
     for (let y = 0; y < H; y++) {
@@ -456,7 +456,7 @@ async function finish(ctx, kind, p, planes, clock) {
   let lx = -0.55, ly = -0.65, lz = 0.52;
   const lm = Math.sqrt(lx * lx + ly * ly + lz * lz);
   lx /= lm; ly /= lm; lz /= lm;
-  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1);
+  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1) * (cfg.reliefK || 1);
   const gloss = cfg.gloss * (0.3 + p.empaste);
   const selFull = ctx.selFull;
   const data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;

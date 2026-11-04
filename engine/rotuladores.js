@@ -122,7 +122,7 @@ async function drawContours(ctx, seg, Lfull, opts, clock) {
     const d0 = lab[r * 3] - lab[q * 3], d1 = lab[r * 3 + 1] - lab[q * 3 + 1], d2 = lab[r * 3 + 2] - lab[q * 3 + 2];
     const contrast = Math.min(1, Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2) / 40);
     // solo bordes con contraste y con recorrido: pocas líneas, decididas
-    const want = C.clamp((contrast - opts.thr) * 2.2 + (reg.imp[r] - 0.5) * opts.impK, 0, 1) * C.smoothstep(6, 30, ch.n);
+    const want = C.clamp((contrast - opts.thr) * 2.2 + (reg.imp[r] - 0.5) * opts.impK, 0, 1) * C.smoothstep(10, 40, ch.n) * (opts.density === undefined ? 1 : opts.density);
     if (rand() > want) continue;
     // suavizado fuerte de la cadena (sin escalones ni ondas de la segmentación)
     { const m = ch.n, w = 5, sx = new Float32Array(m), sy = new Float32Array(m);
@@ -149,7 +149,8 @@ async function drawContours(ctx, seg, Lfull, opts, clock) {
         if (ddx * ddx + ddy * ddy >= step * step || k === xs.length - 1) { rx.push(xs[k]); ry.push(ys[k]); }
       }
       if (rx.length < 2) continue;
-      const over = (opts.overshoot || 0) * acc;
+      // la punta se pasa un poco (nunca atraviesa la forma)
+      const over = Math.min((opts.overshoot || 0) * acc, opts.width * 6);
       if (over > 0) {
         const m = rx.length;
         let ex = rx[m - 1] - rx[m - 2], ey = ry[m - 1] - ry[m - 2], el = Math.hypot(ex, ey) || 1;
@@ -214,7 +215,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
     const r = order[oi];
     const lum = reg.lum[r], dark = 1 - lum;
     if (lum > 0.86 - 0.08 * p.cobertura) continue;                       // blanco del papel
-    const want = fillP * (0.55 + 0.6 * reg.imp[r]) * (0.6 + 0.6 * dark);
+    const want = fillP * (0.8 + 0.6 * reg.imp[r]) * (0.75 + 0.6 * dark);
     if (rand() > want) continue;
     markerColor(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2], sat, col);
     C.varyColor(col[0], col[1], col[2], (rand() - 0.5) * p.varTono * 0.5, 0, 0, col);
@@ -283,9 +284,10 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const lineCol = new Float32Array(3);
   const lw = Math.max(0.9, (0.7 + 2.2 * p.grosor) * s * (mode === "moda" ? 1 : 0.8));
   await drawContours(ctx, seg, Lfull, {
-    lib: ln, width: lw, opacity: mode === "acuarelable" ? 0.6 : 0.9,
+    lib: ln, width: lw, opacity: mode === "acuarelable" ? 0.5 : mode === "moda" ? 0.85 : 0.7,
+    density: { moda: 0.55, vetas: 0.3, acuarelable: 0.3, linea: 0.7 }[mode],
     thr: (mode === "moda" ? 0.3 : mode === "linea" ? 0.22 : 0.5) - 0.15 * p.detalle, impK: 0.8,
-    segLen: (40 + 140 * p.longitud) * s, gap: 3, overshoot: mode === "moda" ? 0.25 : 0.12,
+    segLen: (40 + 140 * p.longitud) * s, gap: 4, overshoot: mode === "moda" ? 0.12 : 0.06,
     apply: (g, a, r) => {
       if (mode === "moda") { lineCol[0] = 0.05; lineCol[1] = 0.05; lineCol[2] = 0.06; }
       else { markerColor(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2], 1.5, lineCol); lineCol[0] *= 0.45; lineCol[1] *= 0.45; lineCol[2] *= 0.45; }

@@ -56,7 +56,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
     }
     // tono suavizado a resolución de análisis
     const tb = Float32Array.from(tone);
-    C.gaussBlur(tb, aw, ah, Math.max(1.5, 4 * s / ctx.fa));
+    C.gaussBlur(tb, aw, ah, Math.max(1, (mode === "carbon" ? 4 : 1.5) * s / ctx.fa));
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
@@ -94,6 +94,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
   const ths = [0, 0.3, 0.5, 0.68];
   const varH = p.varTono * 0.5, varS = p.varSat * 0.6;
   const sel = ctx.sel, selDetail = ctx.selMode === "detalle";
+  const toneFloor = mode === "mixta" ? 0 : mode === "carbon" ? 0.6 : 0.35;
 
   const totalStages = nPass + 1;
 
@@ -112,7 +113,8 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
     const useLib = lib && !isContour;
     const pool = useLib ? (j < 2 && libLight.length ? libLight : lib) : null;
     const Rc = lib ? Math.max(0.45, (0.32 + p.grosor * 1.4) * s) : R; // contornos: línea fina
-    const sp = isContour ? Math.max(1, Rc * 3.2) : lib ? Math.max(1.0, R * 1.3, L * 0.16) : Math.max(1.0, R * 2.6 + 0.4 * s, L * 0.12);
+    const sketch = isContour && (mode === "boceto" || mode === "mixta");
+    const sp = isContour ? Math.max(1, Rc * 3.2, sketch ? 9 * s : 0) : lib ? Math.max(1.0, R * 1.3, L * 0.16) : Math.max(1.0, R * 2.6 + 0.4 * s, L * 0.12);
     const cols = Math.ceil(W / sp), rows = Math.ceil(H / sp);
     const edgeThr = (0.42 - 0.3 * p.detalle) * (mode === "linea" || mode === "mixta" ? 0.75 : mode === "boceto" ? 0.9 : 1) * (alt ? 1.25 : 1);
     let cnt = 0, cap = 1 << 16;
@@ -149,15 +151,18 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
       const g0 = (y | 0) * W + (x | 0);
       const t = ctx.at(tone, x, y);
       let target;
-      if (isContour) target = Math.min(1, t * 0.6 + 0.5);
+      if (sketch) target = mode === "mixta" ? Math.min(0.8, t * 0.35 + 0.42) : Math.min(0.55, t * 0.25 + 0.3);
+      else if (isContour) target = Math.min(1, t * 0.6 + 0.5);
       else target = Math.min(t, caps[j]);
       if (D[g0] >= target - 0.04) continue;
 
       ctx.colorAt(level, x, y, col);
       tmpc[0] = col[0]; tmpc[1] = col[1]; tmpc[2] = col[2];
-      let lenMul = isContour ? 0.45 : 1;
+      let lenMul = sketch ? 0.9 : isContour ? 0.45 : 1;
       if (selDetail && sel) lenMul *= 1 - 0.4 * ctx.at(sel, x, y);
-      S.traceStroke(ctx, path, x, y, {
+      // boceto: la línea no calca el borde, va un poco al lado
+      const jx = sketch ? (rand() - 0.5) * 3 * s : 0, jy = sketch ? (rand() - 0.5) * 3 * s : 0;
+      S.traceStroke(ctx, path, C.clamp(x + jx, 0, W - 1), C.clamp(y + jy, 0, H - 1), {
         R: Rj, Lmax: L * lenMul * (0.55 + rand() * 0.9), step: Math.max(0.8, Rj * 2 + 1.5 * s),
         curv: isContour ? 0.95 : regAng ? 0.02 + 0.25 * p.curvatura : (j === 0 ? 0.05 + 0.9 * p.curvatura : 0.05 + 0.45 * p.curvatura),
         colorTol: isContour ? 0.45 : 0.55 - 0.25 * p.detalle, color: tmpc, level,
@@ -165,6 +170,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
         minLen: Rj * 6, fine: isContour,
       });
       if (!isContour) S.wobblePath(path, useLib ? Rj * 0.12 : Rj * 0.6, Rj * (useLib ? 12 : 40), rand() * 6.28);
+      else if (sketch) S.wobblePath(path, 0.8 * s, 60 * s, rand() * 6.28);
       const nP = path.n, len = path.len || 1;
       let st = null;
       if (useLib) {
@@ -194,7 +200,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
       const A = raster.A, tl = raster.tl, tg = raster.tg, U = raster.U, V = raster.V;
       const prL = useLib ? pr * 0.85 : pr;
       let prC = lib && isContour ? 0.62 : 1; // contornos más ligeros sobre grafito real
-      if (isContour) prC *= (mode === "linea" || mode === "mixta" ? 1.35 : mode === "negros" ? 1.5 : mode === "boceto" ? 0.8 : 1) * (alt ? 0.55 : 1) * (opts.contourMul || 1);
+      if (isContour) prC *= (mode === "linea" || mode === "mixta" ? 1.35 : mode === "negros" ? 1.5 : mode === "boceto" ? 0.5 : 1) * (alt ? 0.55 : 1) * (opts.contourMul || 1);
       for (let tt = 0; tt < nt; tt++) {
         const li = tl[tt], g = tg[tt];
         const xx = g % W, yy = (g / W) | 0;
@@ -204,6 +210,8 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
           Lib.sampleAt(st, U[li], V[li], ts);
           const tooth = pap ? 0.55 + 0.45 * C.smoothstep(0.15, 0.75, pap.eqN(xx, yy)) : 1;
           a = ts[0] * A[li] * prL * tooth;
+          // el rayado no ensucia el blanco: se aclara donde la foto es clara
+          if (a > 0.003) { const tl0 = ctx.at(tone, xx, yy); a *= toneFloor + (1 - toneFloor) * C.smoothstep(0.02, 0.14, tl0); }
         } else {
           const gr = pap ? pap.eq(xx, yy) : C.tileAt(grain, xx * gsInv, yy * gsInv);
           const dep = 0.22 + 0.78 * C.smoothstep(lo, hi, gr);

@@ -86,6 +86,10 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const nzY = C.fbmGrid(gw, gh, Math.max(2, gw / 10), 4, ctx.seed + 802, 0.55);
   const nzT = C.fbmGrid(gw, gh, Math.max(2, gw / 7), 5, ctx.seed + 803, 0.55);
   const nzB = C.fbmGrid(gw, gh, Math.max(2, gw / 4), 3, ctx.seed + 804, 0.5);
+  // ruido fino del filo (bordes rotos, no redondeados)
+  const fgw = Math.max(4, Math.ceil(ww / 2)), fgh = Math.max(4, Math.ceil(wh / 2));
+  const nfX = C.fbmGrid(fgw, fgh, Math.max(2, 3 * ss), 3, ctx.seed + 806, 0.6);
+  const nfY = C.fbmGrid(fgw, fgh, Math.max(2, 3 * ss), 3, ctx.seed + 807, 0.6);
 
   const tmp = new Float32Array(wn);
   const layers = [];
@@ -110,21 +114,23 @@ async function paint(ctx, p, seg, Lfull, clock) {
     const m = new Float32Array(wn);
     for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) {
       const gx = x / 6, gy = y / 6;
-      const ox = (C.bilinear(nzX, gw, gh, gx, gy) - 0.5) * 2 * amp, oy = (C.bilinear(nzY, gw, gh, gx, gy) - 0.5) * 2 * amp;
+      const famp = (1.2 + 1.4 * wet) * ss;
+      const ox = (C.bilinear(nzX, gw, gh, gx, gy) - 0.5) * 2 * amp + (C.bilinear(nfX, fgw, fgh, x / 2, y / 2) - 0.5) * 2 * famp;
+      const oy = (C.bilinear(nzY, gw, gh, gx, gy) - 0.5) * 2 * amp + (C.bilinear(nfY, fgw, fgh, x / 2, y / 2) - 0.5) * 2 * famp;
       const sx = C.clamp(Math.round(x + ox), 0, ww - 1), sy = C.clamp(Math.round(y + oy), 0, wh - 1);
       const r = wl[sy * ww + sx];
       m[y * ww + x] = nCover[r] > k ? 1 : 0;
     }
     // borde: húmedo = suave y con flecos; seco = nítido
+    // campo suave del borde (poco desenfoque: las esquinas no se redondean);
+    // el umbral se decide a resolución completa contra el grano del papel
     const soft = Float32Array.from(m);
-    blur(soft, ww, wh, (0.5 + (1.2 + 5 * hum) * wet) * ss * 1.4, tmp);
+    blur(soft, ww, wh, (0.55 + 1.1 * hum * wet) * ss, tmp);
     const cov = new Float32Array(wn);
     for (let i = 0; i < wn; i++) {
       const x = i % ww, y = (i / ww) | 0;
-      const fr = (C.bilinear(nzB, gw, gh, x / 6, y / 6) - 0.5) * 0.55 * wet * hum; // flecos de floración
-      const sv = soft[i] + fr;
-      const hard = C.smoothstep(0.42, 0.58, sv);
-      cov[i] = hard + (C.clamp(sv * 1.15, 0, 1) - hard) * wet * hum * 0.85;
+      const fr = (C.bilinear(nzB, gw, gh, x / 6, y / 6) - 0.5) * 0.4 * wet * hum; // flecos de floración
+      cov[i] = C.clamp(soft[i] + fr, 0, 1);
     }
     // proteger las formas claras: una aguada solo invade una mancha más clara
     // cerca del borde, y menos cuanto más estrecha es (se "pinta alrededor")
@@ -133,7 +139,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
       for (let i = 0; i < wn; i++) {
         const r = wl[i];
         if (nCover[r] > k || cov[i] < 0.002) continue;
-        const allowed = Math.min(1.2 * amp + 1.5, 0.3 * thinW[i] + 0.6);
+        const allowed = Math.min(0.45 * amp + 0.6, 0.12 * thinW[i] + 0.3);
         cov[i] *= C.clamp(1 - dInW[i] / allowed, 0, 1);
       }
     }
@@ -191,7 +197,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
       else if (eW[i] > 1e-4) { const iw = 1 / eW[i]; aR[i] = eR[i] * iw; aG[i] = eG[i] * iw; aB[i] = eB[i] * iw; }
       else { aR[i] = 0; aG[i] = 0; aB[i] = 0; }
     }
-    layers.push({ cov, rim, aR, aG, aB, wet, bloom });
+    layers.push({ cov, rim, aR, aG, aB, wet, bloom, ws: 0.04 + 0.16 * wet * hum });
     await clock.tick(0.08 + 0.4 * (k + 1) / K);
   }
 
@@ -240,6 +246,9 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const dnK = 0.55 + 0.4 * p.intensidad;
   const cover = ctx.cover, fullCover = p.cobertura >= 0.995;
   const L0 = layers.length;
+  const edgeTile = C.makeGrainTile(ctx.seed + 808, "paper");
+  const etInv = 1 / Math.max(1, Math.sqrt(s) * 1.4);
+  const edgeG = 0.3 + 0.25 * p.granulado, edgeF = 0.22, dryK = 0.35 + 0.5 * p.granulado;
   for (let y = 0; y < H; y++) {
     let wy = (y + 0.5) / qy - 0.5; if (wy < 0) wy = 0; if (wy > wh - 1) wy = wh - 1;
     const y0 = wy | 0, y1 = y0 < wh - 1 ? y0 + 1 : y0, fy = wy - y0;
@@ -254,7 +263,17 @@ async function paint(ctx, p, seg, Lfull, clock) {
       let AR = 0, AG = 0, AB = 0;
       for (let k = 0; k < L0; k++) {
         const Lk = layers[k];
-        let cv = Lk.cov[i00] * w00 + Lk.cov[i10] * w10 + Lk.cov[i01] * w01 + Lk.cov[i11] * w11;
+        const cf = Lk.cov[i00] * w00 + Lk.cov[i10] * w10 + Lk.cov[i01] * w01 + Lk.cov[i11] * w11;
+        if (cf < 0.02) continue;
+        // filo roto: el agua se detiene en las fibras del papel
+        const fn = C.tileAt(edgeTile, x * etInv, y * etInv);
+        const ws = Lk.ws;
+        let cv = cf >= 0.98 ? 1 : C.smoothstep(0.5 - ws, 0.5 + ws, cf + (gr - 0.5) * edgeG + (fn - 0.5) * edgeF);
+        // pincel seco en el filo de las aguadas más secas: el papel asoma en los picos
+        if (Lk.wet < 0.5 && cf < 0.95 && cv > 0) {
+          const band = C.smoothstep(0.45, 0.6, cf) * (1 - C.smoothstep(0.7, 0.92, cf));
+          cv *= 1 - dryK * (1 - Lk.wet) * band * C.smoothstep(0.5, 0.75, gr * 0.7 + fn * 0.3);
+        }
         if (k === 0) cv *= 1 - (gap[i00] * w00 + gap[i10] * w10 + gap[i01] * w01 + gap[i11] * w11);
         if (cv < 0.002) continue;
         const rm = Lk.rim[i00] * w00 + Lk.rim[i10] * w10 + Lk.rim[i01] * w01 + Lk.rim[i11] * w11;

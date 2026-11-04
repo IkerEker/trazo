@@ -49,7 +49,7 @@ const TECHNIQUES = [
     params: PAINT,
     variants: [
       { id: "pleinair", name: "Plein air", values: { intensidad: 92, grosor: 48, longitud: 32, curvatura: 45, cobertura: 95, empaste: 18, varTono: 14, varSat: 14, varLuz: 18, detalle: 50 } },
-      { id: "lineaplano", name: "Línea y plano", values: { intensidad: 90, grosor: 45, longitud: 45, curvatura: 55, cobertura: 70, empaste: 8, varTono: 8, varSat: 10, varLuz: 8, detalle: 60 } },
+      { id: "planos", name: "Planos opacos", values: { intensidad: 95, grosor: 50, longitud: 35, curvatura: 35, cobertura: 100, empaste: 10, varTono: 8, varSat: 8, varLuz: 10, detalle: 55 } },
       { id: "expresivo", name: "Retrato expresivo", values: { intensidad: 88, grosor: 50, longitud: 40, curvatura: 55, cobertura: 100, empaste: 25, varTono: 28, varSat: 30, varLuz: 30, detalle: 55 } },
       { id: "diluido", name: "Diluido", values: { intensidad: 70, grosor: 55, longitud: 35, curvatura: 45, cobertura: 85, empaste: 5, varTono: 15, varSat: 15, varLuz: 15, detalle: 40 } },
     ],

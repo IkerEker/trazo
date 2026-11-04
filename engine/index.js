@@ -24,7 +24,7 @@ const Pencil = require("./pencil.js");
 const Paper = require("./paper.js");
 const Lib = require("./library.js");
 const Seg = require("./segment.js");
-const Painter2 = require("./painter2.js");
+const Painter3 = require("./painter3.js");
 const Water2 = require("./watercolor2.js");
 const Xilo = require("./xilografia.js");
 const Markers = require("./rotuladores.js");
@@ -94,8 +94,8 @@ async function render(input, opts, hooks) {
   const detail = tech === "xilografia" && p.modo === "expresiva" ? 0.12 + 0.3 * p.detalle : d0 + d1 * p.detalle;
   clock.stage(0.11, 0.2, "Viendo la imagen en manchas");
   const seg = await Seg.segment(ctx, { detail }, clock);
-  clock.stage(0.2, 0.25, "Ajustando los bordes");
-  const Lfull = await Seg.fullLabels(ctx, seg, clock);
+  // etiquetas a resolución completa (el pintor por capas no las necesita)
+  const Lfull = tech === "oleo" || tech === "gouache" ? null : (clock.stage(0.2, 0.25, "Ajustando los bordes"), await Seg.fullLabels(ctx, seg, clock));
   const end = opts.paper ? 0.88 : 0.95;
 
   let paint;
@@ -126,9 +126,9 @@ async function render(input, opts, hooks) {
     clock.stage(0.25, end, "Collage y técnica mixta");
     paint = await Mixta.paintCollage(ctx, p, seg, Lfull, clock);
   } else {
-    clock.stage(0.25, 0.82, "Pintando");
-    const planes = await Painter2.paint(ctx, tech, p, seg, Lfull, clock);
-    clock.stage(0.82, end, "Acabado");
+    clock.stage(0.2, 0.84, "Pintando");
+    const planes = await Painter3.paint(ctx, tech, p, seg, clock);
+    clock.stage(0.84, end, "Acabado");
     paint = await Painter.finish(ctx, tech, p, planes, clock);
   }
 
