@@ -184,6 +184,7 @@ tools/
   run.js             ← prueba el motor en Node con una imagen
   serve.js + mock-photoshop.js ← el panel en el navegador con Photoshop simulado
   shots.js, flow_test.js       ← capturas a varios tamaños y prueba de interacción
+REFERENCIAS/         ← obras de cada estilo, solo para estudio (no se usan en el plugin)
 TEXTURES/            ← material real, una carpeta por técnica en cada sección
   PINCELADAS/        ← trazos sueltos (fuente de plugin/textures/<técnica>.bin)
   MANCHAS/           ← manchas centradas sobre blanco
