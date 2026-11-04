@@ -141,7 +141,7 @@ async function paint(ctx, kind, p, clock) {
   const bris = new Float32Array(NB);
   // trazos reales (si hay biblioteca) y soporte real a escala física
   const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : null;
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   const ts = new Float32Array(2);
   const col2 = new Float32Array(3);
   const stripes = new Float32Array(64);
@@ -470,6 +470,36 @@ async function finish(ctx, kind, p, planes, clock) {
     C.boxBlurH(Hm, tmpA, W, H, ra); C.boxBlurV(tmpA, Hm, W, H, ra);
   }
   const aoK = 0.9 * luzK * (0.3 + p.empaste) * cfg.shade;
+  // sombras cortas que proyecta la pasta hacia el lado contrario a la luz
+  let Sh = null;
+  if (Hh && luzK > 0.05 && relief > 0.15) {
+    Sh = new Uint8Array(N);
+    const dl = Math.sqrt(lx * lx + ly * ly), sx = lx / dl, sy = ly / dl, tanE = lz / dl;
+    const stride = Math.max(1, Math.round(Math.sqrt(s)));
+    const hk = relief * 0.5;
+    // la sombra no puede ser más larga que lo que permite la pasta más alta
+    let hMax = 0; for (let i = 0; i < N; i += 7) if (Hh[i] > hMax) hMax = Hh[i];
+    const steps = Math.max(1, Math.min(10, Math.ceil(hMax * hk / (stride * tanE))));
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x, h0 = Hh[i];
+        let best = 0;
+        for (let t = 1; t <= steps; t++) {
+          const qx = (x + sx * t * stride + 0.5) | 0, qy = (y + sy * t * stride + 0.5) | 0;
+          if (qx < 0 || qy < 0 || qx >= W || qy >= H) break;
+          const v = (Hh[qy * W + qx] - h0) * hk - t * stride * tanE;
+          if (v > best) best = v;
+        }
+        if (best > 0) Sh[i] = Math.min(255, best * 400) | 0;
+      }
+      if ((y & 63) === 0) await clock.tick(0.3 * y / H);
+    }
+  }
+  const shK = 0.32 * Math.min(1.4, luzK);
+  // "estudio" (luz fuerte): destellos solo en las crestas; "museo" (luz suave): sin destellos
+  const studio = C.smoothstep(0.3, 0.75, luz);
+  const Gl = planes.Gl || null;
+  const matte = !!cfg.matte, luminous = !!cfg.luminous;
   const selFull = ctx.selFull;
   const data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
   const chalk = kind === "gouache";
@@ -510,17 +540,32 @@ async function finish(ctx, kind, p, planes, clock) {
         const dif = (ndl - lz) * 1.15;
         let k = 1 + dif;
         if (Hm) { const dv = Hm[i] - Hh[i]; if (dv > 0) k *= 1 - Math.min(0.25, dv * aoK); }
+        if (Sh && Sh[i]) k *= 1 - shK * (Sh[i] / 255);
         r *= k; g *= k; b *= k;
-        if (gloss > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
+        if (gloss > 0 && studio > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
           const rv = 2 * ndl * nz - lz;
-          if (rv > 0.6) {
+          // brillo solo en las crestas (por encima de su entorno) y según la pintura de cada trazo
+          const crest = Hm ? C.smoothstep(0, 0.06, Hh[i] - Hm[i]) : 1;
+          if (rv > 0.6 && crest > 0) {
             let sp = (rv - 0.6) / 0.4; sp = sp * sp; sp = sp * sp; sp = sp * sp;
-            const add = sp * gloss * (cfg.glossByHeight ? C.smoothstep(0.08, 0.6, Hh[i]) : 1);
+            const gk = Gl ? Gl[i] / 200 : 1;
+            const add = sp * gloss * gk * crest * studio * (cfg.glossByHeight ? C.smoothstep(0.08, 0.6, Hh[i]) : 1);
             r += add; g += add; b += add;
           }
         }
       }
-      if (chalk) { r = r * 0.95 + 0.035; g = g * 0.95 + 0.035; b = b * 0.95 + 0.035; }
+      if (matte) {
+        // gouache seco: valores comprimidos (las luces bajan, los oscuros suben) y tintes claros calcáreos
+        const l = 0.299 * r + 0.587 * g + 0.114 * b;
+        const ds = 1 - 0.22 * C.smoothstep(0.55, 0.95, l);
+        r = l + (r - l) * ds; g = l + (g - l) * ds; b = l + (b - l) * ds;
+        r = 0.055 + r * 0.9; g = 0.055 + g * 0.9; b = 0.06 + b * 0.895;
+      } else if (chalk) { r = r * 0.95 + 0.035; g = g * 0.95 + 0.035; b = b * 0.95 + 0.035; }
+      if (luminous) {
+        // pastel seco: el medio más luminoso (casi todo pigmento)
+        const l = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = l + (r - l) * 1.12 + 0.02; g = l + (g - l) * 1.12 + 0.02; b = l + (b - l) * 1.12 + 0.02;
+      }
       let a = cv > 1 ? 1 : cv;
       if (selFull) a *= selFull[i] / 255;
       if (srcA) a *= data[i * comp + 3] / 255;

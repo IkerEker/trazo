@@ -77,6 +77,7 @@ async function render(input, opts, hooks) {
   ctx.assets = assets;
   ctx.strokesOf = (names) => strokesOf(assets, names);
   ctx.paperPrep = opts.support ? Lib.preparePaper(opts.support) : null;
+  ctx.physMM = Lib.physMM(tech); // escala física del soporte (trama, grano)
   // biblioteca de pinceladas principal de la técnica
   const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_gouache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], ceras: ["pin_manley"], mixtalg: ["pin_gouache"], xilografia: [] }[tech];
   ctx.lib = strokesOf(assets, mainLib) || (opts.library && opts.library.kind === "strokes" ? opts.library : null);

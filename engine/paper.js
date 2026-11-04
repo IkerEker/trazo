@@ -45,7 +45,7 @@ async function makePaper(technique, W, H, seed, clock, prep, modo) {
 /** Soporte a partir de la textura real (escaneada de los fondos), a escala física. */
 async function realPaper(cfg, technique, W, H, seed, clock, prep) {
   const Lib = require("./library.js");
-  const smp = Lib.paperSampler(prep, Lib.paperScale(Math.max(W, H)));
+  const smp = Lib.paperSampler(prep, Lib.paperScale(Math.max(W, H), Lib.physMM(technique)));
   const amp = technique === "oleo" ? 30 : technique === "acuarela" || technique === "gouache" ? 22 : 18;
   const gw = Math.max(4, Math.ceil(W / 64)), gh = Math.max(4, Math.ceil(H / 64));
   const low = C.fbmGrid(gw, gh, Math.max(2, gw / 3), 3, seed + 77, 0.5);

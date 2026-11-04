@@ -102,6 +102,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const mad = A.ov_madera && A.ov_madera.items.length ? K.overlaySampler(A.ov_madera.items[(rand() * A.ov_madera.items.length) | 0], W, H, { zoom: 0.8 }) : null;
   const imp = A.ov_impresion && A.ov_impresion.items.length ? K.overlaySampler(A.ov_impresion.items[(rand() * A.ov_impresion.items.length) | 0], W, H) : null;
   const madM = mad ? 0.28 : 0;
+  const papS = ctx.paperPrep ? require("./library.js").paperSampler(ctx.paperPrep, require("./library.js").paperScale(Math.max(W, H), ctx.physMM)) : null;
 
   const P = Math.max(2.2, (2.4 + 8 * p.grosor) * s * (expr ? 1.5 : 1));           // separación de cortes
   const Lc = Math.max(6, (14 + 90 * p.longitud) * s);                               // largo de cada corte
@@ -127,8 +128,11 @@ async function paint(ctx, p, seg, Lfull, clock) {
       const along = (x * tx + y * ty) / Lc + C.hash2(si, r, 3) * 3;
       const u = along - Math.floor(along);
       const env = Math.sqrt(Math.max(0, Math.sin(u * Math.PI)));                      // corte en punta (gubia en V)
+      // tres zonas (como en los grabados reales): luces de papel limpio, sombras de negro pleno
+      // y solo los medios tonos hechos con líneas
+      const tz = C.smoothstep(0.1, 0.84, t);
       // ancho de la tinta: oscuridad, con los cortes blancos afinándose en los extremos
-      let b = t;
+      let b = tz;
       if (b > 0.5) b = 1 - (1 - b) * env * (0.75 + 0.5 * C.hash2(si, r, 7));          // cortes blancos en punta
       else b = b * (0.55 + 0.45 * env);                                                 // líneas negras que se afinan
       const half = b * P * 0.5;
@@ -136,8 +140,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
       const rough = (C.hash2(x >> 1, y >> 1, 11) - 0.5) * 0.9 * Math.min(1.5, P * 0.12);   // borde mellado
       let a = C.clamp((half - dist + rough) / 0.9 + 0.5, 0, 1);
       // masas oscuras: casi plenas, con algún corte blanco suelto (fondo tallado)
-      if (t > 0.9) { const keep = C.hash2(si, r, 41) < 0.35 + 0.4 * reg.imp[r]; if (!keep) a = 1; }
-      else if (t < 0.04) a = 0;
+      if (t > 0.84) { const keep = C.hash2(si, r, 41) < 0.02 + 0.22 * reg.imp[r] * reg.imp[r] * (1 - C.smoothstep(0.84, 0.95, t)); if (!keep) a = 1; }
+      else if (t < 0.1) a = 0;
       ink[i] = a;
     }
     if ((y & 31) === 0) await clock.tick(0.12 + 0.4 * y / H);
@@ -218,9 +222,11 @@ async function paint(ctx, p, seg, Lfull, clock) {
         const deep = C.smoothstep(0.75, 0.98, it);
         let speck = C.smoothstep(0.975 - 0.02 * gran, 0.995, C.hash2(x >> 1, y >> 1, 17));
         if (imp) speck = Math.max(speck, C.smoothstep(0.18, 0.04, imp(x, y)) * 0.8);
+        // la tinta no llega a los valles del papel (más con poca presión)
+        if (papS) speck = Math.max(speck, C.smoothstep(0.03 + 0.06 * gran, 0.0, papS.eqN(x, y)) * (0.5 + 0.6 * (1 - pr)));
         pr *= 1 - gran * deep * speck * 0.9;
         // veta de la madera en las masas
-        if (mad) pr *= 1 - (madM * 1.4 + 0.08) * (0.4 + gran) * deep * C.smoothstep(0.74, 0.96, mad(x, y));
+        if (mad) pr *= 1 - (madM * 0.9 + 0.04) * (0.4 + gran) * deep * C.smoothstep(0.8, 0.97, mad(x, y));
         a *= pr;
       } else if (it < 0.04) {
         // restos de madera en los vaciados grandes, alineados con el corte

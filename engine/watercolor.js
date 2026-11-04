@@ -173,7 +173,7 @@ async function paint(ctx, p, clock) {
   /* ----- 5) composición a resolución completa ----- */
   const grain = C.makeGrainTile(ctx.seed + 21, "rough");
   const gsInv = 1 / Math.max(1, Math.sqrt(s) * 2.0);
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   // con aguadas reales: una aguada base más clara + veladuras que aportan el resto del pigmento
   const glaze = !!lib;
   const gk = 0.85 * (0.55 + 0.5 * p.intensidad);

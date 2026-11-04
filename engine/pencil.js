@@ -43,7 +43,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
   const regAng = seg ? new Float32Array(seg.reg.n) : null;
   if (seg && Lfull && !onlyLines) {
     const reg = seg.reg;
-    const papS = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+    const papS = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
     const smK = new Float32Array(reg.n);
     const rA = C.mulberry32(ctx.seed * 5 + 1);
     for (let r = 0; r < reg.n; r++) {
@@ -81,7 +81,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
 
   // trazos reales de grafito/carbón: los más ligeros para las primeras pasadas
   const libLight = lib ? lib.filter((m) => m.fill < 0.62) : null;
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   const ts = new Float32Array(2);
   const R = lib ? (2.4 + p.grosor * 13) * s : (0.35 + p.grosor * 2.4) * s;
   const L = lib ? (14 + p.longitud * 95) * s : (10 + p.longitud * 80) * s;
@@ -199,6 +199,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
       }
       const A = raster.A, tl = raster.tl, tg = raster.tg, U = raster.U, V = raster.V;
       const prL = useLib ? pr * 0.85 : pr;
+      const pvar = 0.6 + 0.8 * rand();
       let prC = lib && isContour ? 0.62 : 1; // contornos más ligeros sobre grafito real
       if (isContour) prC *= (mode === "linea" || mode === "mixta" ? 1.35 : mode === "negros" ? 1.5 : mode === "boceto" ? 0.5 : 1) * (alt ? 0.55 : 1) * (opts.contourMul || 1);
       for (let tt = 0; tt < nt; tt++) {
@@ -209,7 +210,9 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
           // grafito real de la muestra + el diente del papel (siempre el mismo)
           Lib.sampleAt(st, U[li], V[li], ts);
           const tooth = pap ? 0.55 + 0.45 * C.smoothstep(0.15, 0.75, pap.eqN(xx, yy)) : 1;
-          a = ts[0] * A[li] * prL * tooth;
+          // presión a lo largo de la línea: entra suave, aprieta en el centro y suelta al final
+          const uu = U[li] < 0 ? 0 : U[li] > 1 ? 1 : U[li];
+          a = ts[0] * A[li] * prL * tooth * (0.7 + 0.3 * Math.sin(Math.PI * (0.12 + 0.76 * uu)) * pvar);
           // el rayado no ensucia el blanco: se aclara donde la foto es clara
           if (a > 0.003) { const tl0 = ctx.at(tone, xx, yy); a *= toneFloor + (1 - toneFloor) * C.smoothstep(0.02, 0.14, tl0); }
         } else {
@@ -257,7 +260,11 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
   /* ----- salida ----- */
   const out = new Uint8Array(N * 4);
   const selFull = ctx.selFull, data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
-  const gr0 = 0.12, gg0 = 0.12, gb0 = 0.14; // grafito
+  // grafito: nunca llega al negro y brilla (se aclara y azulea) donde está muy cargado;
+  // carbón: negro mate y profundo
+  const charcoal = mode === "carbon" || mode === "negros";
+  const gr0 = charcoal ? 0.07 : 0.15, gg0 = charcoal ? 0.065 : 0.155, gb0 = charcoal ? 0.06 : 0.18;
+  const dMax = charcoal ? 0.97 : 0.9;
   for (let i = 0; i < N; i++) {
     const o = i * 4;
     let a, r, g, b;
@@ -267,9 +274,14 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
       if (a < 0.004) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 0; continue; }
       r = 1 - (1 - tr) / a; g = 1 - (1 - tgv) / a; b = 1 - (1 - tb) / a;
     } else {
-      a = D[i];
+      a = D[i] > dMax ? dMax + (D[i] - dMax) * 0.15 : D[i];
       if (a < 0.004) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 0; continue; }
       r = gr0; g = gg0; b = gb0;
+      if (!charcoal && D[i] > 0.6) {
+        // brillo del grafito bruñido: lo más denso refleja la luz y se lee más claro
+        const sh = C.smoothstep(0.65, 0.98, D[i]) * 0.32;
+        r += (0.3 - r) * sh; g += (0.31 - g) * sh; b += (0.35 - b) * sh;
+      }
     }
     if (selFull) a *= selFull[i] / 255;
     if (srcA) a *= data[i * comp + 3] / 255;

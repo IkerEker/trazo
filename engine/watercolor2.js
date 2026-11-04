@@ -32,7 +32,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const reg = seg.reg;
   const rand = C.mulberry32(ctx.seed * 17 + 11);
   const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : Lib.synthetic("acuarela");
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
 
   /* ---------- rejilla de trabajo para las aguadas ---------- */
   const q = Math.max(1, Math.max(W, H) / 1400);
@@ -321,6 +321,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const cover = ctx.cover, fullCover = p.cobertura >= 0.995;
   const L0 = layers.length;
   const edgeG = 0.3 + 0.25 * p.granulado, edgeF = 0.22, dryK = 0.35 + 0.5 * p.granulado;
+  const sepK = 0.25 + 0.6 * p.granulado; // separación de pigmentos en los grises
   for (let y = 0; y < H; y++) {
     let wy = (y + 0.5) / qy - 0.5; if (wy < 0) wy = 0; if (wy > wh - 1) wy = wh - 1;
     const y0 = wy | 0, y1 = y0 < wh - 1 ? y0 + 1 : y0, fy = wy - y0;
@@ -351,14 +352,30 @@ async function paint(ctx, p, seg, Lfull, clock) {
         const rm = Lk.rim[i00] * w00 + Lk.rim[i10] * w10 + Lk.rim[i01] * w01 + Lk.rim[i11] * w11;
         // densidad: anillo de borde, turbulencia y granulado (más en el anillo y en lo oscuro)
         const bl = Lk.bloom[i00] * w00 + Lk.bloom[i10] * w10 + Lk.bloom[i01] * w01 + Lk.bloom[i11] * w11;
+        const lr = Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11;
+        const lg = Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11;
+        const lb = Lk.aB[i00] * w00 + Lk.aB[i10] * w10 + Lk.aB[i01] * w01 + Lk.aB[i11] * w11;
+        // granulación según la familia del pigmento: los azules ultramar y las tierras granulan,
+        // los ftalos (verdes y azules intensos y limpios) casi no
+        const blue = C.smoothstep(0.08, 0.45, lr - lb);                    // absorbe rojo más que azul
+        const sumA = lr + lg + lb + 1e-4, chroma = (Math.max(lr, lg, lb) - Math.min(lr, lg, lb)) / sumA;
+        const earth = C.smoothstep(0.05, 0.3, lb - lg) * C.smoothstep(0.05, 0.25, lg - lr * 0.6) * (1 - C.smoothstep(0.35, 0.7, chroma));
+        const phthalo = C.smoothstep(0.25, 0.6, chroma) * C.smoothstep(0.1, 0.4, lr - lg);
+        const gfam = 0.55 + 0.95 * blue + 0.75 * earth - 0.35 * phthalo;
         const dens = (1 + rimK * rm) * (1 + turbK * (tu - 0.5) * 2 * (0.6 + Lk.wet)) *
-                     (1 + granK * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
+                     (1 + granK * gfam * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
                      (ltiles[k] ? 1 + tileK * Math.max(-2, Math.min(2, ltiles[k].l(x, y))) : 1);
         const dm = dropMul && Lk.wet > 0.5 ? dropMul[i] : 1;
         const f = cv * (dens < 0.1 ? 0.1 : dens) * dm;
-        AR += f * (Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11);
-        AG += f * (Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11);
-        AB += f * (Lk.aB[i00] * w00 + Lk.aB[i10] * w10 + Lk.aB[i01] * w01 + Lk.aB[i11] * w11);
+        // en los grises mezclados los pigmentos se separan en motas cálidas y frías
+        let sepR = 1, sepB = 1;
+        if (sepK > 0 && chroma < 0.35) {
+          const fl = (C.tileAt(edgeTile, x * etInv * 0.55 + 311, y * etInv * 0.55 + 97) - 0.5) * sepK * (1 - chroma / 0.35) * (0.6 + 0.8 * (0.5 - gr));
+          sepR = 1 + fl; sepB = 1 - fl;
+        }
+        AR += f * lr * sepR;
+        AG += f * lg;
+        AB += f * lb * sepB;
       }
       // pinceladas: aportan más pigmento del mismo color local
       const dn = Dn[i];

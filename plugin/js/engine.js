@@ -1,4 +1,4 @@
-/*! Trazo 1.7.0 · motor de pintura (generado por tools/bundle.js, no editar) */
+/*! Trazo 1.8.0 · motor de pintura (generado por tools/bundle.js, no editar) */
 (function (root) {
 "use strict";
 const __defs = {}, __cache = {};
@@ -763,6 +763,7 @@ async function render(input, opts, hooks) {
   ctx.assets = assets;
   ctx.strokesOf = (names) => strokesOf(assets, names);
   ctx.paperPrep = opts.support ? Lib.preparePaper(opts.support) : null;
+  ctx.physMM = Lib.physMM(tech); // escala física del soporte (trama, grano)
   // biblioteca de pinceladas principal de la técnica
   const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_gouache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], ceras: ["pin_manley"], mixtalg: ["pin_gouache"], xilografia: [] }[tech];
   ctx.lib = strokesOf(assets, mainLib) || (opts.library && opts.library.kind === "strokes" ? opts.library : null);
@@ -1050,7 +1051,7 @@ function transToRGBA(Tr, Tg, Tb, out, mask) {
 async function paperTooth(out, ctx, mode, amount, clock) {
   if (!ctx.paperPrep || amount <= 0) return out;
   const { W, H } = ctx;
-  const pap = Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H)));
+  const pap = Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM));
   const sign = mode === "valles" ? -1 : 1;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -1337,9 +1338,15 @@ function paperSampler(prep, texPerPx) {
   };
 }
 
-/** px de textura por px de salida, suponiendo un cuadro de ~30 cm y escaneos a ~10 px/mm. */
-function paperScale(longSide) {
-  const pxPerMm = longSide / 300;
+/**
+ * Tamaño físico supuesto del original (lado largo, mm) por técnica: un óleo de caballete es más
+ * grande que un dibujo o un gouache de cuaderno, así que su trama y su grano se ven más finos.
+ */
+const PHYS_MM = { oleo: 600, gouache: 320, acuarela: 380, lapiz: 300, ceras: 420, mixtalg: 300, xilografia: 340 };
+function physMM(tech) { return PHYS_MM[tech] || 300; }
+/** px de textura por px de salida, con escaneos a ~10 px/mm y el tamaño físico supuesto. */
+function paperScale(longSide, mm) {
+  const pxPerMm = longSide / (mm || 300);
   return 10 / Math.max(0.05, pxPerMm);
 }
 
@@ -1382,7 +1389,7 @@ function pick(arr, rand, wfn) {
   return arr[arr.length - 1];
 }
 
-module.exports = { pick, synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };
+module.exports = { physMM, pick, synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };
 
 };
 __defs["mixta.js"] = function (module, exports, require) {
@@ -1644,7 +1651,7 @@ async function paint(ctx, kind, p, clock) {
   const bris = new Float32Array(NB);
   // trazos reales (si hay biblioteca) y soporte real a escala física
   const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : null;
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   const ts = new Float32Array(2);
   const col2 = new Float32Array(3);
   const stripes = new Float32Array(64);
@@ -1973,6 +1980,36 @@ async function finish(ctx, kind, p, planes, clock) {
     C.boxBlurH(Hm, tmpA, W, H, ra); C.boxBlurV(tmpA, Hm, W, H, ra);
   }
   const aoK = 0.9 * luzK * (0.3 + p.empaste) * cfg.shade;
+  // sombras cortas que proyecta la pasta hacia el lado contrario a la luz
+  let Sh = null;
+  if (Hh && luzK > 0.05 && relief > 0.15) {
+    Sh = new Uint8Array(N);
+    const dl = Math.sqrt(lx * lx + ly * ly), sx = lx / dl, sy = ly / dl, tanE = lz / dl;
+    const stride = Math.max(1, Math.round(Math.sqrt(s)));
+    const hk = relief * 0.5;
+    // la sombra no puede ser más larga que lo que permite la pasta más alta
+    let hMax = 0; for (let i = 0; i < N; i += 7) if (Hh[i] > hMax) hMax = Hh[i];
+    const steps = Math.max(1, Math.min(10, Math.ceil(hMax * hk / (stride * tanE))));
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x, h0 = Hh[i];
+        let best = 0;
+        for (let t = 1; t <= steps; t++) {
+          const qx = (x + sx * t * stride + 0.5) | 0, qy = (y + sy * t * stride + 0.5) | 0;
+          if (qx < 0 || qy < 0 || qx >= W || qy >= H) break;
+          const v = (Hh[qy * W + qx] - h0) * hk - t * stride * tanE;
+          if (v > best) best = v;
+        }
+        if (best > 0) Sh[i] = Math.min(255, best * 400) | 0;
+      }
+      if ((y & 63) === 0) await clock.tick(0.3 * y / H);
+    }
+  }
+  const shK = 0.32 * Math.min(1.4, luzK);
+  // "estudio" (luz fuerte): destellos solo en las crestas; "museo" (luz suave): sin destellos
+  const studio = C.smoothstep(0.3, 0.75, luz);
+  const Gl = planes.Gl || null;
+  const matte = !!cfg.matte, luminous = !!cfg.luminous;
   const selFull = ctx.selFull;
   const data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
   const chalk = kind === "gouache";
@@ -2013,17 +2050,32 @@ async function finish(ctx, kind, p, planes, clock) {
         const dif = (ndl - lz) * 1.15;
         let k = 1 + dif;
         if (Hm) { const dv = Hm[i] - Hh[i]; if (dv > 0) k *= 1 - Math.min(0.25, dv * aoK); }
+        if (Sh && Sh[i]) k *= 1 - shK * (Sh[i] / 255);
         r *= k; g *= k; b *= k;
-        if (gloss > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
+        if (gloss > 0 && studio > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
           const rv = 2 * ndl * nz - lz;
-          if (rv > 0.6) {
+          // brillo solo en las crestas (por encima de su entorno) y según la pintura de cada trazo
+          const crest = Hm ? C.smoothstep(0, 0.06, Hh[i] - Hm[i]) : 1;
+          if (rv > 0.6 && crest > 0) {
             let sp = (rv - 0.6) / 0.4; sp = sp * sp; sp = sp * sp; sp = sp * sp;
-            const add = sp * gloss * (cfg.glossByHeight ? C.smoothstep(0.08, 0.6, Hh[i]) : 1);
+            const gk = Gl ? Gl[i] / 200 : 1;
+            const add = sp * gloss * gk * crest * studio * (cfg.glossByHeight ? C.smoothstep(0.08, 0.6, Hh[i]) : 1);
             r += add; g += add; b += add;
           }
         }
       }
-      if (chalk) { r = r * 0.95 + 0.035; g = g * 0.95 + 0.035; b = b * 0.95 + 0.035; }
+      if (matte) {
+        // gouache seco: valores comprimidos (las luces bajan, los oscuros suben) y tintes claros calcáreos
+        const l = 0.299 * r + 0.587 * g + 0.114 * b;
+        const ds = 1 - 0.22 * C.smoothstep(0.55, 0.95, l);
+        r = l + (r - l) * ds; g = l + (g - l) * ds; b = l + (b - l) * ds;
+        r = 0.055 + r * 0.9; g = 0.055 + g * 0.9; b = 0.06 + b * 0.895;
+      } else if (chalk) { r = r * 0.95 + 0.035; g = g * 0.95 + 0.035; b = b * 0.95 + 0.035; }
+      if (luminous) {
+        // pastel seco: el medio más luminoso (casi todo pigmento)
+        const l = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = l + (r - l) * 1.12 + 0.02; g = l + (g - l) * 1.12 + 0.02; b = l + (b - l) * 1.12 + 0.02;
+      }
       let a = cv > 1 ? 1 : cv;
       if (selFull) a *= selFull[i] / 255;
       if (srcA) a *= data[i * comp + 3] / 255;
@@ -2163,9 +2215,10 @@ function config(kind, p, s) {
       paperBreak: 0, chalk: false, libs: ["pin_oleo", "pin_gouache"], dirJit: 0.06, edgeN: 0.42, edgeT: 0.9, temp: 0.06, reliefK: 0.5,
       tools: null, hBlur: 1.6,
       sizeVar: 0.42, lenVar: 0.55, loadK: 0.55, shapes: 1.0, shapeOp: 0.8, shapeSkip: 0.6, tileAmt: 0.7,
+      dirt: 0.28, groundTint: 0.16, finalPass: 0.6, matte: 0,
     };
     // gestual: el punto de partida que funciona (decidido, abstracto)
-    if (m === "gestual") Object.assign(c, { R0: c.R0 * 1.3, Lk: c.Lk * 1.45, curv: Math.min(1, c.curv * 1.4 + 0.1), wet: 0.32, varK: 1.6, dual: 0.8, satK: 1.15, lost: 1.5, planeK: 0, layers: 2 + Math.round(p.detalle * 0.8), dirJit: 0.1 });
+    if (m === "gestual") Object.assign(c, { dirt: 0.38, finalPass: 1.0, R0: c.R0 * 1.3, Lk: c.Lk * 1.45, curv: Math.min(1, c.curv * 1.4 + 0.1), wet: 0.32, varK: 1.6, dual: 0.8, satK: 1.15, lost: 1.5, planeK: 0, layers: 2 + Math.round(p.detalle * 0.8), dirJit: 0.1 });
     // planos y espátula: pincel ancho para encajar y espátula para construir los planos
     if (m === "planos") Object.assign(c, { R0: c.R0 * 1.25, layers: L(1.2), tools: ["brush", "knife", "knife", "knife"], curv: 0.06, dirJit: 0.18, Lk: c.Lk * 0.9,
       knifeLk: 2.2 + p.longitud * 4, varK: 1.4, dual: 0.75, satK: 1.12, lost: 1.3, planeK: 0.35, thick: 0.5 + 0.6 * p.empaste, reliefK: 0.75, gloss: 0.4, wet: 0.15, hBlur: 1.0 });
@@ -2185,13 +2238,14 @@ function config(kind, p, s) {
       paperBreak: 0.7, chalk: true, libs: ["pin_gouache"], dirJit: 0.06, edgeN: 0.35, edgeT: 0.7, temp: 0.05, reliefK: 0.6,
       tools: null, hBlur: 1.6,
       sizeVar: 0.4, lenVar: 0.5, loadK: 0.45, shapes: 1.0, shapeOp: 0.75, shapeSkip: 0.6, tileAmt: 0.5,
+      dirt: 0.12, groundTint: 0, finalPass: 0.5, matte: 1,
     };
     if (m === "pleinair") Object.assign(c, { R0: c.R0 * 1.15, varK: 1.3, temp: 0.07, dual: 0.5, edgeN: 0.45 });
     // planos opacos: valores por planos, pero cada plano hecho con brochazos planos visibles y filo seco
     if (m === "planos") Object.assign(c, { R0: c.R0 * 1.45, planeK: 0.7, steps: 4, lechoso: 0.03, Lk: c.Lk * 1.2, curv: 0.15, lost: 1.3, varK: 1.5, dual: 0.55, tolClip: 0.52,
       dirJit: 0.1, paperBreak: 1.0, edgeN: 0.6, edgeT: 1.0, sK: c.sK * 1.1, satK: 1.15, temp: 0.08, layers: 2 + Math.round(p.detalle * 0.9) });
     // retrato expresivo: gestual, color subido, pincel seco y papel entre trazos
-    if (m === "expresivo") Object.assign(c, { R0: c.R0 * 1.5, Lk: c.Lk * 1.6, curv: Math.min(1, c.curv * 1.4 + 0.12), sink: 0, satK: 1.25, lechoso: 0.02, varK: 2.0, dual: 0.9,
+    if (m === "expresivo") Object.assign(c, { finalPass: 1.0, dirt: 0.2, R0: c.R0 * 1.5, Lk: c.Lk * 1.6, curv: Math.min(1, c.curv * 1.4 + 0.12), sink: 0, satK: 1.25, lechoso: 0.02, varK: 2.0, dual: 0.9,
       lost: 1.8, tolClip: 0.55, planeK: 0, layers: 2 + Math.round(p.detalle * 0.7), paperBreak: 1.2, dirJit: 0.1, wet: 0.16, temp: 0.1, cov0: 0.72, edgeN: 0.6, edgeT: 1.1, sK: c.sK * 1.2 });
     if (m === "diluido") Object.assign(c, { shapes: 1.4, shapeOp: 0.55, shapeSkip: 0.75, op: 0.72 + 0.1 * p.intensidad, baseOp: 0.55, lechoso: 0.05, thick: c.thick * 0.4, sK: c.sK * 0.6, lost: 1.1, planeK: 0.25, paperBreak: 1, cov0: 0.7, wet: 0.14, layers: Math.max(2, c.layers - 1) });
   } else {
@@ -2208,15 +2262,16 @@ function config(kind, p, s) {
       tools: null, hBlur: 1.2, media: "cera", tooth: 0.75, press: 0.22 + 0.36 * p.intensidad, palK: 0, palN: 16, paperWhite: 0.86, sparse: 0.45,
       hand: -Math.PI / 4, handK: 0.15, cross: p.cruzado || 0, smudge: 0,
       sizeVar: 0.3, lenVar: 0.45, loadK: 0.35, shapes: 0, shapeOp: 0, shapeSkip: 0, tileAmt: 0,
+      dirt: 0, groundTint: 0, finalPass: 0, matte: 0,
     };
     // óleo en barra: pasta espesa y untuosa, apenas deja ver el papel
-    if (m === "barra") Object.assign(c, { libs: ["pin_barra"], R0: c.R0 * 1.45, Lk: c.Lk * 0.75, tooth: 0.3, paperWhite: 0.97, sparse: 0.15, thick: 0.6 + 0.8 * p.empaste, sK: 1.1, ridge: 0.8, wet: 0.3,
+    if (m === "barra") Object.assign(c, { dirt: 0.22, libs: ["pin_barra"], R0: c.R0 * 1.45, Lk: c.Lk * 0.75, tooth: 0.3, paperWhite: 0.97, sparse: 0.15, thick: 0.6 + 0.8 * p.empaste, sK: 1.1, ridge: 0.8, wet: 0.3,
       gloss: 0.3, reliefK: 1.0, shade: 1.0, handK: 0.05, dual: 0.55, varK: 1.3, hBlur: 0.9 });
     // pastel graso: cubriente, se arrastra y mezcla; algo de grano
-    if (m === "pastelgraso") Object.assign(c, { libs: ["pin_barra", "pin_manley"], R0: c.R0 * 1.1, tooth: 0.5, thick: 0.25 + 0.4 * p.empaste, sK: 0.7, ridge: 0.4, wet: 0.35,
+    if (m === "pastelgraso") Object.assign(c, { dirt: 0.25, libs: ["pin_barra", "pin_manley"], R0: c.R0 * 1.1, tooth: 0.5, thick: 0.25 + 0.4 * p.empaste, sK: 0.7, ridge: 0.4, wet: 0.35,
       gloss: 0.12, reliefK: 0.7, handK: 0.1, dual: 0.5, palK: 0.35 });
     // pastel seco: polvo de color, de canto en los fondos, difuminado con el dedo
-    if (m === "pastelseco") Object.assign(c, { libs: ["pin_pastel", "pin_barra"], R0: c.R0 * 1.3, tooth: 0.8, op: 0.88, thick: 0, ridge: 0, sK: 0.35, wet: 0.08, chalk: true,
+    if (m === "pastelseco") Object.assign(c, { luminous: 1, libs: ["pin_pastel", "pin_barra"], R0: c.R0 * 1.3, tooth: 0.8, op: 0.88, thick: 0, ridge: 0, sK: 0.35, wet: 0.08, chalk: true,
       lechoso: 0.05, satK: 1.05, smudge: 0.55 + 0.3 * (1 - p.intensidad), handK: 0.12, palK: 0.25, reliefK: 0.3 });
     // ceras escolares (Manley): trazo estrecho, rayado a mano, caja de colores limitada, mucho grano
     if (m === "manley") Object.assign(c, { libs: ["pin_manley"], R0: c.R0 * 0.75, tooth: 0.92, op: 0.88, sparse: 0.6, thick: 0.08, sK: 0.4, ridge: 0.1, wet: 0, gloss: 0.06, handK: 0.3,
@@ -2236,6 +2291,22 @@ function config(kind, p, s) {
   c.minRK = 1 - d * 1.0;                // pincel más fino posible
   c.sizeVar = (c.sizeVar || 0.15) * (1 - d * 0.5);
   return c;
+}
+
+/* ---------- mezcla de pigmentos (aproximación sustractiva) ----------
+ * Dos pinturas que se mezclan no promedian su luz: se acercan a la mezcla
+ * geométrica de sus reflectancias (como en Kubelka-Munk), así un amarillo y un
+ * azul dan un verde apagado y no un gris. Se usa una mezcla de ambas para no
+ * ensuciar en exceso; tablas para que sea barato. */
+const _LOGT = new Float32Array(1025), _EXPT = new Float32Array(1025);
+for (let i = 0; i <= 1024; i++) { _LOGT[i] = Math.log(i / 1024 + 0.02); _EXPT[i] = Math.exp(-i / 1024 * 4); }
+const _LMIN = Math.log(0.02);
+function plog(v) { const i = (v <= 0 ? 0 : v >= 1 ? 1024 : (v * 1024 + 0.5) | 0); return _LOGT[i]; }
+function pexp(l) { const d = -l / 4; const i = d <= 0 ? 0 : d >= 1 ? 1024 : (d * 1024 + 0.5) | 0; return _EXPT[i]; }
+function pmix(a, b, t) {
+  const lin = a + (b - a) * t;
+  const geo = pexp(plog(a) * (1 - t) + plog(b) * t) - 0.02;
+  return lin * 0.4 + (geo < 0 ? 0 : geo) * 0.6;
 }
 
 /* ---------- utilidades ---------- */
@@ -2298,13 +2369,15 @@ async function paint(ctx, kind, p, seg, clock) {
   const Sc = new Uint8Array(N); // cobertura de pinceladas (la capa base no cuenta)
   const Bc = new Uint8Array(N * 3); // color que se quiso poner (sin textura ni variación)
   const Pc = new Uint8Array(N * 3); // color de la pintura que quedó (sin el sombreado de las cerdas)
+  const Gl = new Uint8Array(N);     // brillo de la pintura en cada punto (el barniz no es uniforme)
   let lib = [];
   for (const nm of cfg.libs) { const a = ctx.assets && ctx.assets[nm]; if (a && a.kind === "strokes") lib = lib.concat(a.samples); }
   if (!lib.length) lib = Lib.synthetic(kind);
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   // ceras: el grano del papel se calcula una vez por píxel (se consulta muchísimas veces)
-  let toothMap = null;
-  if (cfg.media) {
+  let toothMap = null, toothFill = null;
+  if (cfg.media) toothFill = new Uint8Array(N); // cuánto se ha llenado el diente del papel
+  if (cfg.media || pap) {
     toothMap = new Uint8Array(N);
     const grainT = pap ? null : C.makeGrainTile(ctx.seed + 3, "tooth"), gInv = 1 / Math.max(1, Math.sqrt(s) * 0.9);
     for (let y = 0; y < H; y++) {
@@ -2405,6 +2478,11 @@ async function paint(ctx, kind, p, seg, clock) {
           tRel = cfg.tileAmt * cfg.thick * 0.07 * (lc + 2.5);
           if (t.prep.cr) { t.c(x, y, cch); const kc = cfg.tileAmt * 0.5; r += cch[0] * kc; b += cch[1] * kc; g -= (0.299 * cch[0] + 0.114 * cch[1]) / 0.587 * kc; }
           r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
+        }
+        if (cfg.groundTint && !cfg.ground) {
+          // lo que asoma entre pinceladas es la imprimatura cálida, no un color limpio
+          const k = cfg.groundTint;
+          r = r * (1 - k) + gcol[0] * k; g = g * (1 - k) + gcol[1] * k; b = b * (1 - k) + gcol[2] * k;
         }
         if (cfg.ground) {
           // imprimatura: asoma en las sombras y los medios tonos; en las luces queda una veladura clara
@@ -2580,6 +2658,15 @@ async function paint(ctx, kind, p, seg, clock) {
     const pr8 = (cr * 255 + 0.5) | 0, pg8 = (cg * 255 + 0.5) | 0, pb8 = (cb * 255 + 0.5) | 0;
     const sK = cfg.sK, wet = cfg.wet, pbk = cfg.paperBreak && pap ? cfg.paperBreak : 0;
     const tooth = cfg.tooth || 0, ridge = cfg.ridge || 0, bcT = cfg.media ? 0.25 : 0.45;
+    // pincel sucio: color del lienzo donde se apoya el pincel
+    let dirt = cfg.dirt || 0, dr0 = 0, dg0 = 0, db0 = 0;
+    if (dirt > 0) {
+      const gx = C.clamp(path.xs[0] | 0, 0, W - 1), gy = C.clamp(path.ys[0] | 0, 0, H - 1), g0 = gy * W + gx;
+      if (Cv[g0] > 0.5) { dr0 = Pc[g0 * 3] / 255; dg0 = Pc[g0 * 3 + 1] / 255; db0 = Pc[g0 * 3 + 2] / 255; dirt *= 0.5 + rand(); } else dirt = 0;
+      if (dirt > 0 && Math.abs(dr0 - cr) + Math.abs(dg0 - cg) + Math.abs(db0 - cb) > 1.2) dirt *= 0.3;
+    }
+    // brillo de este trazo (más médium / más pasta = más brillo); el gouache y el pastel no brillan
+    const gl8 = Math.min(255, (cfg.gloss > 0 ? (0.35 + 0.65 * rand()) * (0.6 + 0.4 * Math.min(1.5, thick / Math.max(0.05, cfg.thick))) : 0) * 200) | 0;
     // carga del pincel: empieza cargado y se va quedando seco (unos trazos más que otros)
     const loadK = (cfg.loadK || 0) * (0.4 + 0.9 * rand());
     const dryU = 0.55 + 0.4 * rand();
@@ -2612,18 +2699,21 @@ async function paint(ctx, kind, p, seg, clock) {
       }
       // ceras: el color se queda en los picos del papel (más presión, menos huecos)
       if (tooth > 0) {
-        const gr = toothMap[g] * (1 / 255);
+        // el diente se va llenando: cada pasada alcanza valles más hondos (y deja de agarrar al final)
+        const tf = toothFill[g];
+        const gr = Math.min(1, (toothMap[g] + tf * 0.55) * (1 / 255));
         // la punta aprieta más en el centro y deja vetas a lo largo del trazo
         const pr = press * (0.7 + 0.3 * ts[0]) * (0.78 + 0.22 * (1 - v * v) + (stripes[((v + 1) * 31.5) | 0] - 0.5) * 0.35);
         const e0 = 0.8 - pr, tt = (gr - e0) * 3.3333;
         a *= 1 - tooth + tooth * (tt <= 0 ? 0 : tt >= 1 ? 1 : tt * tt * (3 - 2 * tt));
         if (a < 0.004) continue;
+        const nf = tf + a * 70;
+        toothFill[g] = nf > 255 ? 255 : nf;
       }
       // pincel seco: el borde parcial se rompe sobre el grano del papel
       if (pbk > 0 && ts[0] < 0.92) {
-        const x = g % W, y = (g / W) | 0;
         const e = (0.92 - ts[0]) * 1.6 * pbk;
-        a *= C.smoothstep(e - 0.25, e + 0.15, pap.eqN(x, y));
+        a *= C.smoothstep(e - 0.25, e + 0.15, toothMap[g] * (1 / 255));
         if (a < 0.004) continue;
       }
       // al final del trazo queda menos pintura: se abre en vetas de cerdas y deja ver lo de debajo
@@ -2632,26 +2722,31 @@ async function paint(ctx, kind, p, seg, clock) {
       if (loadK > 0 && uc > dryU) {
         const e = (uc - dryU) / (1 - dryU) * loadK * 1.4;
         const bv = stripes[((v + 1) * 31.5) | 0];
-        a *= C.smoothstep(e - 0.35, e + 0.05, bv * 0.85 + 0.15 * ts[0]);
+        const sh = toothMap ? toothMap[g] * (1 / 255) : 0.5;
+        a *= C.smoothstep(e - 0.35, e + 0.05, bv * 0.5 + sh * 0.38 + 0.12 * ts[0]);
         if (a < 0.004) continue;
       }
-      let sv = ts[1] * sK * C.smoothstep(0.45, 0.95, ts[0]);
+      // con mucha carga las cerdas apenas marcan; al quedarse seco, las estrías se ven más
+      let sv = ts[1] * sK * (1.3 - 0.45 * load) * C.smoothstep(0.45, 0.95, ts[0]);
       if (sv < 0) sv *= 0.55 * C.smoothstep(0.7, 1, ts[0]);
       const mz = stripes[((v + 1) * 31.5) | 0] * mixAmt;
       // más carga = tono algo más hondo; menos carga = algo más claro
       const kl = 1 - 0.1 * (load - 1) * 2;
-      const br = (cr + (c2r - cr) * mz) * kl, bgc = (cg + (c2g - cg) * mz) * kl, bbc = (cb + (c2b - cb) * mz) * kl;
+      let br = (cr + (c2r - cr) * mz) * kl, bgc = (cg + (c2g - cg) * mz) * kl, bbc = (cb + (c2b - cb) * mz) * kl;
+      // pincel sucio: al empezar arrastra algo del color de donde se apoyó (mezcla de pigmentos)
+      if (dirt > 0 && uc < 0.4) { const kd = dirt * (1 - uc / 0.4); br = pmix(br, dr0, kd); bgc = pmix(bgc, dg0, kd); bbc = pmix(bbc, db0, kd); }
       let rr, gg, bb;
       if (sv < 0) { const f = 1 + (sv < -0.6 ? -0.6 : sv) * 0.55; rr = br * f; gg = bgc * f; bb = bbc * f; }
       else { const f = (sv > 1 ? 0.5 : sv * 0.5) * (0.25 + 0.75 * (0.299 * br + 0.587 * bgc + 0.114 * bbc)); rr = br + (1 - br) * f; gg = bgc + (1 - bgc) * f; bb = bbc + (1 - bbc) * f; }
       const cv = Cv[g];
       if (wet > 0 && cv > 0.05) {
-        // mezcla húmeda solo con colores parecidos (nada de barro en los bordes)
+        // mezcla húmeda como pigmento (no como luz): entre colores distintos da un tono
+        // intermedio apagado, no un gris; cuanto más distintos, menos se mezclan
         const inv = 1 / cv, ur = Pr[g] * inv, ug = Pg[g] * inv, ub = Pb[g] * inv;
         const dd = Math.abs(ur - br) + Math.abs(ug - bgc) + Math.abs(ub - bbc);
-        if (dd < 0.6) {
-          const mm = wet * (0.15 + 0.85 * (u < 0 ? 0 : u > 1 ? 1 : u)) * (cv > 1 ? 1 : cv) * (1 - dd / 0.6);
-          rr += (ur - rr) * mm; gg += (ug - gg) * mm; bb += (ub - bb) * mm;
+        if (dd < 1.1) {
+          const mm = wet * (0.15 + 0.85 * uc) * (cv > 1 ? 1 : cv) * (1 - dd / 1.1);
+          rr = pmix(rr, ur > 1 ? 1 : ur, mm); gg = pmix(gg, ug > 1 ? 1 : ug, mm); bb = pmix(bb, ub > 1 ? 1 : ub, mm);
         }
       }
       const ia = 1 - a;
@@ -2660,6 +2755,7 @@ async function paint(ctx, kind, p, seg, clock) {
       const a8 = (a * 255) | 0;
       if (a8 > Sc[g]) Sc[g] = a8;
       if (a > bcT) { Bc[o3] = br0; Bc[o3 + 1] = bg0; Bc[o3 + 2] = bb0; Pc[o3] = pr8; Pc[o3 + 1] = pg8; Pc[o3 + 2] = pb8; }
+      if (a > 0.3) Gl[g] = gl8;
       if (thick > 0) {
         // relieve de la pincelada: cuerpo, surcos de las cerdas y crestas en los bordes
         const av = v < 0 ? -v : v;
@@ -2736,6 +2832,7 @@ async function paint(ctx, kind, p, seg, clock) {
       const a8 = (a * 255) | 0;
       if (a8 > Sc[g]) Sc[g] = a8;
       if (a > 0.45) { Bc[o3] = br0; Bc[o3 + 1] = bg0; Bc[o3 + 2] = bb0; Pc[o3] = pr8; Pc[o3 + 1] = pg8; Pc[o3 + 2] = pb8; }
+      if (a > 0.3) Gl[g] = 190;
       // relieve: meseta lisa, cresta en los lados (pasta empujada) y al final
       const av = v < 0 ? -v : v;
       const h = thick * (0.7 + 0.75 * C.smoothstep(0.78, 0.97, av) + 0.9 * C.smoothstep(endU - 0.1, endU - 0.02, u));
@@ -2891,7 +2988,8 @@ async function paint(ctx, kind, p, seg, clock) {
       // empaste desigual: frotados finos, pinceladas normales y algunas muy cargadas
       const tr = rand();
       const tier = tr < 0.3 ? 0.15 + 0.2 * rand() : tr < 0.78 ? 0.5 + 0.35 * rand() : 1.1 + 0.6 * rand();
-      const thick = cfg.thick * (0.55 + 0.45 * lum) * (0.75 + 0.25 * im) * tier * (k === 0 ? 0.85 : 1);
+      // luces gruesas, oscuros finos (regla de taller): el relieve sigue al valor
+      const thick = cfg.thick * (0.18 + 0.82 * Math.pow(lum, 1.25)) * (0.75 + 0.25 * im) * tier * (k === 0 ? 0.85 : 1);
       const tolC = tolClip * (1 + cfg.lost * C.smoothstep(0.55, 0.15, im));
       if (knife) renderKnife(Rs, col, base, cfg.op, thick, tolC);
       else renderStroke(Rs, col, base, cfg.op * (0.9 + 0.1 * rand()), thick, tolC, k);
@@ -2909,6 +3007,25 @@ async function paint(ctx, kind, p, seg, clock) {
         }
       }
       if ((oi & 15) === 0) await clock.tick(0.2 + 0.75 * (k + oi / cnt) / nL);
+    }
+  }
+  if (cfg.finalPass > 0) {
+    const reFin = 1.3 - (p.realismo === undefined ? 0.5 : p.realismo) * 1.2;
+    const Rf = cfg.R0 * 1.05;
+    const nF = Math.round(cfg.finalPass * reFin * W * H / (Rf * Rf * 260));
+    const ref = refs[0];
+    for (let k = 0; k < nF; k++) {
+      let x = rand() * W, y = rand() * H;
+      const im = impAt(x, y);
+      if (im > 0.42 || rand() < im * 1.5) continue;                 // solo fuera del foco
+      refAt(ref, x, y, base);
+      const len = trace(ref, x, y, base, { step: Math.max(1, Rf), Lmax: Rf * cfg.Lk * (0.6 + 0.8 * rand()), curv: cfg.curv, tol: cfg.tolStop * 1.2,
+        ca: 1, sa: 0, fine: false, handK: 0, hx: 1, hy: 0 });
+      if (len < Rf * 2.5) continue;
+      C.varyColor(base[0], base[1], base[2], (rand() - 0.5) * 2 * varH, (rand() - 0.5) * varS, (rand() - 0.5) * 2 * varL, col);
+      const lum = 0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2];
+      renderStroke(Rf * (0.8 + 0.5 * rand()), col, base, cfg.op * (0.75 + 0.2 * rand()), cfg.thick * (0.18 + 0.82 * Math.pow(lum, 1.25)) * (0.5 + 0.6 * rand()), cfg.tolClip * (1 + cfg.lost), 0);
+      if ((k & 15) === 0) await clock.tick(0.955);
     }
   }
   if (cfg.smudge > 0) {
@@ -2931,8 +3048,8 @@ async function paint(ctx, kind, p, seg, clock) {
     }
   }
   await clock.tick(0.97);
-  const fcfg = { reliefK: cfg.reliefK, hBlur: cfg.hBlur || 1.6, canvasTex: cfg.canvasTex, shade: cfg.shade, gloss: cfg.gloss, under: 0, R0: cfg.R0, thick: cfg.thick, glossByHeight: true, chalk: cfg.chalk };
-  return { Pr, Pg, Pb, Cv, Hh, cfg: fcfg, grain: null, gsInv: 1, real: true, pap };
+  const fcfg = { matte: cfg.matte, luminous: cfg.luminous, reliefK: cfg.reliefK, hBlur: cfg.hBlur || 1.6, canvasTex: cfg.canvasTex, shade: cfg.shade, gloss: cfg.gloss, under: 0, R0: cfg.R0, thick: cfg.thick, glossByHeight: true, chalk: cfg.chalk };
+  return { Pr, Pg, Pb, Cv, Hh, Gl, cfg: fcfg, grain: null, gsInv: 1, real: true, pap };
 }
 
 module.exports = { paint, config, dtFilter };
@@ -2985,7 +3102,7 @@ async function makePaper(technique, W, H, seed, clock, prep, modo) {
 /** Soporte a partir de la textura real (escaneada de los fondos), a escala física. */
 async function realPaper(cfg, technique, W, H, seed, clock, prep) {
   const Lib = require("./library.js");
-  const smp = Lib.paperSampler(prep, Lib.paperScale(Math.max(W, H)));
+  const smp = Lib.paperSampler(prep, Lib.paperScale(Math.max(W, H), Lib.physMM(technique)));
   const amp = technique === "oleo" ? 30 : technique === "acuarela" || technique === "gouache" ? 22 : 18;
   const gw = Math.max(4, Math.ceil(W / 64)), gh = Math.max(4, Math.ceil(H / 64));
   const low = C.fbmGrid(gw, gh, Math.max(2, gw / 3), 3, seed + 77, 0.5);
@@ -3053,7 +3170,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
   const regAng = seg ? new Float32Array(seg.reg.n) : null;
   if (seg && Lfull && !onlyLines) {
     const reg = seg.reg;
-    const papS = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+    const papS = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
     const smK = new Float32Array(reg.n);
     const rA = C.mulberry32(ctx.seed * 5 + 1);
     for (let r = 0; r < reg.n; r++) {
@@ -3091,7 +3208,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
 
   // trazos reales de grafito/carbón: los más ligeros para las primeras pasadas
   const libLight = lib ? lib.filter((m) => m.fill < 0.62) : null;
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   const ts = new Float32Array(2);
   const R = lib ? (2.4 + p.grosor * 13) * s : (0.35 + p.grosor * 2.4) * s;
   const L = lib ? (14 + p.longitud * 95) * s : (10 + p.longitud * 80) * s;
@@ -3209,6 +3326,7 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
       }
       const A = raster.A, tl = raster.tl, tg = raster.tg, U = raster.U, V = raster.V;
       const prL = useLib ? pr * 0.85 : pr;
+      const pvar = 0.6 + 0.8 * rand();
       let prC = lib && isContour ? 0.62 : 1; // contornos más ligeros sobre grafito real
       if (isContour) prC *= (mode === "linea" || mode === "mixta" ? 1.35 : mode === "negros" ? 1.5 : mode === "boceto" ? 0.5 : 1) * (alt ? 0.55 : 1) * (opts.contourMul || 1);
       for (let tt = 0; tt < nt; tt++) {
@@ -3219,7 +3337,9 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
           // grafito real de la muestra + el diente del papel (siempre el mismo)
           Lib.sampleAt(st, U[li], V[li], ts);
           const tooth = pap ? 0.55 + 0.45 * C.smoothstep(0.15, 0.75, pap.eqN(xx, yy)) : 1;
-          a = ts[0] * A[li] * prL * tooth;
+          // presión a lo largo de la línea: entra suave, aprieta en el centro y suelta al final
+          const uu = U[li] < 0 ? 0 : U[li] > 1 ? 1 : U[li];
+          a = ts[0] * A[li] * prL * tooth * (0.7 + 0.3 * Math.sin(Math.PI * (0.12 + 0.76 * uu)) * pvar);
           // el rayado no ensucia el blanco: se aclara donde la foto es clara
           if (a > 0.003) { const tl0 = ctx.at(tone, xx, yy); a *= toneFloor + (1 - toneFloor) * C.smoothstep(0.02, 0.14, tl0); }
         } else {
@@ -3267,7 +3387,11 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
   /* ----- salida ----- */
   const out = new Uint8Array(N * 4);
   const selFull = ctx.selFull, data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
-  const gr0 = 0.12, gg0 = 0.12, gb0 = 0.14; // grafito
+  // grafito: nunca llega al negro y brilla (se aclara y azulea) donde está muy cargado;
+  // carbón: negro mate y profundo
+  const charcoal = mode === "carbon" || mode === "negros";
+  const gr0 = charcoal ? 0.07 : 0.15, gg0 = charcoal ? 0.065 : 0.155, gb0 = charcoal ? 0.06 : 0.18;
+  const dMax = charcoal ? 0.97 : 0.9;
   for (let i = 0; i < N; i++) {
     const o = i * 4;
     let a, r, g, b;
@@ -3277,9 +3401,14 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
       if (a < 0.004) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 0; continue; }
       r = 1 - (1 - tr) / a; g = 1 - (1 - tgv) / a; b = 1 - (1 - tb) / a;
     } else {
-      a = D[i];
+      a = D[i] > dMax ? dMax + (D[i] - dMax) * 0.15 : D[i];
       if (a < 0.004) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 0; continue; }
       r = gr0; g = gg0; b = gb0;
+      if (!charcoal && D[i] > 0.6) {
+        // brillo del grafito bruñido: lo más denso refleja la luz y se lee más claro
+        const sh = C.smoothstep(0.65, 0.98, D[i]) * 0.32;
+        r += (0.3 - r) * sh; g += (0.31 - g) * sh; b += (0.35 - b) * sh;
+      }
     }
     if (selFull) a *= selFull[i] / 255;
     if (srcA) a *= data[i * comp + 3] / 255;
@@ -4395,7 +4524,7 @@ async function paint(ctx, p, clock) {
   /* ----- 5) composición a resolución completa ----- */
   const grain = C.makeGrainTile(ctx.seed + 21, "rough");
   const gsInv = 1 / Math.max(1, Math.sqrt(s) * 2.0);
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
   // con aguadas reales: una aguada base más clara + veladuras que aportan el resto del pigmento
   const glaze = !!lib;
   const gk = 0.85 * (0.55 + 0.5 * p.intensidad);
@@ -4554,7 +4683,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const reg = seg.reg;
   const rand = C.mulberry32(ctx.seed * 17 + 11);
   const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : Lib.synthetic("acuarela");
-  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM)) : null;
 
   /* ---------- rejilla de trabajo para las aguadas ---------- */
   const q = Math.max(1, Math.max(W, H) / 1400);
@@ -4843,6 +4972,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const cover = ctx.cover, fullCover = p.cobertura >= 0.995;
   const L0 = layers.length;
   const edgeG = 0.3 + 0.25 * p.granulado, edgeF = 0.22, dryK = 0.35 + 0.5 * p.granulado;
+  const sepK = 0.25 + 0.6 * p.granulado; // separación de pigmentos en los grises
   for (let y = 0; y < H; y++) {
     let wy = (y + 0.5) / qy - 0.5; if (wy < 0) wy = 0; if (wy > wh - 1) wy = wh - 1;
     const y0 = wy | 0, y1 = y0 < wh - 1 ? y0 + 1 : y0, fy = wy - y0;
@@ -4873,14 +5003,30 @@ async function paint(ctx, p, seg, Lfull, clock) {
         const rm = Lk.rim[i00] * w00 + Lk.rim[i10] * w10 + Lk.rim[i01] * w01 + Lk.rim[i11] * w11;
         // densidad: anillo de borde, turbulencia y granulado (más en el anillo y en lo oscuro)
         const bl = Lk.bloom[i00] * w00 + Lk.bloom[i10] * w10 + Lk.bloom[i01] * w01 + Lk.bloom[i11] * w11;
+        const lr = Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11;
+        const lg = Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11;
+        const lb = Lk.aB[i00] * w00 + Lk.aB[i10] * w10 + Lk.aB[i01] * w01 + Lk.aB[i11] * w11;
+        // granulación según la familia del pigmento: los azules ultramar y las tierras granulan,
+        // los ftalos (verdes y azules intensos y limpios) casi no
+        const blue = C.smoothstep(0.08, 0.45, lr - lb);                    // absorbe rojo más que azul
+        const sumA = lr + lg + lb + 1e-4, chroma = (Math.max(lr, lg, lb) - Math.min(lr, lg, lb)) / sumA;
+        const earth = C.smoothstep(0.05, 0.3, lb - lg) * C.smoothstep(0.05, 0.25, lg - lr * 0.6) * (1 - C.smoothstep(0.35, 0.7, chroma));
+        const phthalo = C.smoothstep(0.25, 0.6, chroma) * C.smoothstep(0.1, 0.4, lr - lg);
+        const gfam = 0.55 + 0.95 * blue + 0.75 * earth - 0.35 * phthalo;
         const dens = (1 + rimK * rm) * (1 + turbK * (tu - 0.5) * 2 * (0.6 + Lk.wet)) *
-                     (1 + granK * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
+                     (1 + granK * gfam * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
                      (ltiles[k] ? 1 + tileK * Math.max(-2, Math.min(2, ltiles[k].l(x, y))) : 1);
         const dm = dropMul && Lk.wet > 0.5 ? dropMul[i] : 1;
         const f = cv * (dens < 0.1 ? 0.1 : dens) * dm;
-        AR += f * (Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11);
-        AG += f * (Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11);
-        AB += f * (Lk.aB[i00] * w00 + Lk.aB[i10] * w10 + Lk.aB[i01] * w01 + Lk.aB[i11] * w11);
+        // en los grises mezclados los pigmentos se separan en motas cálidas y frías
+        let sepR = 1, sepB = 1;
+        if (sepK > 0 && chroma < 0.35) {
+          const fl = (C.tileAt(edgeTile, x * etInv * 0.55 + 311, y * etInv * 0.55 + 97) - 0.5) * sepK * (1 - chroma / 0.35) * (0.6 + 0.8 * (0.5 - gr));
+          sepR = 1 + fl; sepB = 1 - fl;
+        }
+        AR += f * lr * sepR;
+        AG += f * lg;
+        AB += f * lb * sepB;
       }
       // pinceladas: aportan más pigmento del mismo color local
       const dn = Dn[i];
@@ -5064,6 +5210,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const mad = A.ov_madera && A.ov_madera.items.length ? K.overlaySampler(A.ov_madera.items[(rand() * A.ov_madera.items.length) | 0], W, H, { zoom: 0.8 }) : null;
   const imp = A.ov_impresion && A.ov_impresion.items.length ? K.overlaySampler(A.ov_impresion.items[(rand() * A.ov_impresion.items.length) | 0], W, H) : null;
   const madM = mad ? 0.28 : 0;
+  const papS = ctx.paperPrep ? require("./library.js").paperSampler(ctx.paperPrep, require("./library.js").paperScale(Math.max(W, H), ctx.physMM)) : null;
 
   const P = Math.max(2.2, (2.4 + 8 * p.grosor) * s * (expr ? 1.5 : 1));           // separación de cortes
   const Lc = Math.max(6, (14 + 90 * p.longitud) * s);                               // largo de cada corte
@@ -5089,8 +5236,11 @@ async function paint(ctx, p, seg, Lfull, clock) {
       const along = (x * tx + y * ty) / Lc + C.hash2(si, r, 3) * 3;
       const u = along - Math.floor(along);
       const env = Math.sqrt(Math.max(0, Math.sin(u * Math.PI)));                      // corte en punta (gubia en V)
+      // tres zonas (como en los grabados reales): luces de papel limpio, sombras de negro pleno
+      // y solo los medios tonos hechos con líneas
+      const tz = C.smoothstep(0.1, 0.84, t);
       // ancho de la tinta: oscuridad, con los cortes blancos afinándose en los extremos
-      let b = t;
+      let b = tz;
       if (b > 0.5) b = 1 - (1 - b) * env * (0.75 + 0.5 * C.hash2(si, r, 7));          // cortes blancos en punta
       else b = b * (0.55 + 0.45 * env);                                                 // líneas negras que se afinan
       const half = b * P * 0.5;
@@ -5098,8 +5248,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
       const rough = (C.hash2(x >> 1, y >> 1, 11) - 0.5) * 0.9 * Math.min(1.5, P * 0.12);   // borde mellado
       let a = C.clamp((half - dist + rough) / 0.9 + 0.5, 0, 1);
       // masas oscuras: casi plenas, con algún corte blanco suelto (fondo tallado)
-      if (t > 0.9) { const keep = C.hash2(si, r, 41) < 0.35 + 0.4 * reg.imp[r]; if (!keep) a = 1; }
-      else if (t < 0.04) a = 0;
+      if (t > 0.84) { const keep = C.hash2(si, r, 41) < 0.02 + 0.22 * reg.imp[r] * reg.imp[r] * (1 - C.smoothstep(0.84, 0.95, t)); if (!keep) a = 1; }
+      else if (t < 0.1) a = 0;
       ink[i] = a;
     }
     if ((y & 31) === 0) await clock.tick(0.12 + 0.4 * y / H);
@@ -5180,9 +5330,11 @@ async function paint(ctx, p, seg, Lfull, clock) {
         const deep = C.smoothstep(0.75, 0.98, it);
         let speck = C.smoothstep(0.975 - 0.02 * gran, 0.995, C.hash2(x >> 1, y >> 1, 17));
         if (imp) speck = Math.max(speck, C.smoothstep(0.18, 0.04, imp(x, y)) * 0.8);
+        // la tinta no llega a los valles del papel (más con poca presión)
+        if (papS) speck = Math.max(speck, C.smoothstep(0.03 + 0.06 * gran, 0.0, papS.eqN(x, y)) * (0.5 + 0.6 * (1 - pr)));
         pr *= 1 - gran * deep * speck * 0.9;
         // veta de la madera en las masas
-        if (mad) pr *= 1 - (madM * 1.4 + 0.08) * (0.4 + gran) * deep * C.smoothstep(0.74, 0.96, mad(x, y));
+        if (mad) pr *= 1 - (madM * 0.9 + 0.04) * (0.4 + gran) * deep * C.smoothstep(0.8, 0.97, mad(x, y));
         a *= pr;
       } else if (it < 0.04) {
         // restos de madera en los vaciados grandes, alineados con el corte

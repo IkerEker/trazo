@@ -127,13 +127,13 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 
 | Técnica | 5 MP (3000×1688) |
 |---|---|
-| Óleo | 7,8 s |
-| Lápiz | 6,8 s |
-| Gouache | 8,2 s |
-| Acuarela | 6,3 s |
-| Ceras | 9–11 s |
-| Mixta L+G | 8,9 s |
-| Xilografía | 3,2 s |
+| Óleo | 9,0 s |
+| Lápiz | 7,5 s |
+| Gouache | 9,8 s |
+| Acuarela | 7,8 s |
+| Ceras | 12,4 s |
+| Mixta L+G | 12,7 s |
+| Xilografía | 3,3 s |
 
 La vista previa del panel tarda alrededor de 1 s. A 6 MP el motor usa unos 300–450 MB de
 memoria; en calidad Máxima (16 MP) puede pasar de 1 GB. Durante GENERAR, Photoshop muestra su barra
@@ -181,14 +181,27 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      azulados). La mezcla húmeda solo se da entre colores parecidos, para no ensuciar los bordes.
      El relieve del empaste lo hace cada trazo: cuerpo, surcos de las cerdas y crestas en los
      bordes (en el matérico, muy marcadas). Los surcos reciben menos luz (oclusión).
+   - **Física del medio** (a partir del estudio de `reports/Realismo en técnicas artísticas analógicas.md`):
+     mezcla de colores como pigmentos (aproximación sustractiva, no promedio de luz) en la mezcla
+     húmeda y en el **pincel sucio**, que arrastra al empezar el color de donde se apoya; el pincel
+     seco se agarra a las crestas del soporte (trama del lienzo, grano del papel); **luces gruesas,
+     oscuros finos**; el **brillo** es propio de cada trazo y solo aparece en las crestas (con Luz
+     baja, aspecto de foto de museo sin destellos); la pasta proyecta **sombras cortas**; entre
+     pinceladas asoma la **imprimatura** cálida; y un **último pase de pinceladas anchas** fuera del
+     foco, como hacían Sargent o Sorolla. El gouache seca **mate con los valores comprimidos** y los
+     tintes claros algo calcáreos.
+   - **Escala física**: cada técnica supone un original de tamaño real (óleo 60 cm, acuarela 38 cm,
+     dibujo 30 cm…), así la trama y el grano tienen la escala correcta.
    - **Espátula** (óleo, planos y espátula): planos de pasta de borde recto, con dos colores
      arrastrados en vetas, raspados que dejan ver lo de debajo y crestas en los lados y al final.
    - **Ceras**: sin capa base. El color se queda en los picos del papel según la presión (más en
      los oscuros); el blanco lo pone el papel y los claros llevan menos trazos. Las ceras Manley
-     usan una caja de colores limitada sacada de la imagen y se mezclan por capas rayadas a mano;
+     usan una caja de colores limitada sacada de la imagen y se mezclan por capas rayadas a mano; el
+     diente del papel se va llenando con cada pasada (las capas siguientes llegan a valles más hondos);
      el pastel seco se difumina con el dedo en zonas y va sobre papel de color; el óleo en barra
      y el pastel graso son cubrientes, con relieve y arrastre de color.
-4. **Lápiz**: difumino en las zonas lisas y rayado con una dirección coherente en cada zona
+4. **Lápiz**: el grafito nunca llega al negro y brilla donde está muy cargado; el carboncillo da
+   un negro mate y profundo. La presión cambia a lo largo de cada línea. Difumino en las zonas lisas y rayado con una dirección coherente en cada zona
    (sigue la forma o va en diagonal de mano). El sombreado se hace con trazos reales de grafito y carbón (los más ligeros en
    las primeras pasadas) y se acumula hasta igualar el tono de la foto. Encima van contornos
    finos sobre el diente del papel real.
@@ -199,15 +212,22 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    respetan pintando alrededor. El filo de cada aguada se decide a resolución completa contra
    el grano del papel: se rompe en vez de redondearse, y en las aguadas secas queda pincel
    seco en el borde. Cada aguada absorbe según su color (se mezclan por superposición).
+   La **granulación depende del pigmento**: los azules tipo ultramar y las tierras granulan mucho,
+   los colores limpios tipo ftalo casi nada, y en los grises los pigmentos se separan en motas
+   cálidas y frías.
    En **Gotas de agua**, gotas caídas sobre la aguada húmeda empujan el pigmento: centro lavado,
    acumulación en un filo de coliflor irregular, gotitas satélite y corrimientos hacia abajo. Las pinceladas reales aportan textura donde la foto la tiene. (Hasta la
    1.1: una aguada base hecha por abstracción (Kuwahara, sangrado húmedo, bordes de
    pigmento, granulado). Encima van **veladuras con aguadas reales**, más en las zonas oscuras,
    que oscurecen de forma limitada al superponerse. El papel blanco se convierte en
    transparencia.)
-6. **Soporte real a escala física**: se supone un cuadro de unos 30 cm, así que el grano y la
-   trama se ven como en un original. Si faltan las texturas, el motor usa su modelo procedural
-   de la 1.0.
+6. **Soporte real a escala física**: el tamaño supuesto del original depende de la técnica
+   (óleo 60 cm, ceras 42 cm, acuarela 38 cm, xilografía 34 cm, gouache 32 cm, dibujo 30 cm), así
+   que el grano y la trama se ven como en un original. Si faltan las texturas, el motor usa su
+   modelo procedural de la 1.0.
+7. **Xilografía**: tres zonas como en los grabados reales (luces de papel limpio, sombras de negro
+   pleno con solo veta y moteado, y líneas de gubia solo en los medios tonos); el moteado de la
+   tinta sigue los valles del papel; las planchas de color se desregistran enteras.
 
 ---
 

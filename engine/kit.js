@@ -202,7 +202,7 @@ function transToRGBA(Tr, Tg, Tb, out, mask) {
 async function paperTooth(out, ctx, mode, amount, clock) {
   if (!ctx.paperPrep || amount <= 0) return out;
   const { W, H } = ctx;
-  const pap = Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H)));
+  const pap = Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H), ctx.physMM));
   const sign = mode === "valles" ? -1 : 1;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {

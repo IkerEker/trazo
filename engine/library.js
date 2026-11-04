@@ -219,9 +219,15 @@ function paperSampler(prep, texPerPx) {
   };
 }
 
-/** px de textura por px de salida, suponiendo un cuadro de ~30 cm y escaneos a ~10 px/mm. */
-function paperScale(longSide) {
-  const pxPerMm = longSide / 300;
+/**
+ * Tamaño físico supuesto del original (lado largo, mm) por técnica: un óleo de caballete es más
+ * grande que un dibujo o un gouache de cuaderno, así que su trama y su grano se ven más finos.
+ */
+const PHYS_MM = { oleo: 600, gouache: 320, acuarela: 380, lapiz: 300, ceras: 420, mixtalg: 300, xilografia: 340 };
+function physMM(tech) { return PHYS_MM[tech] || 300; }
+/** px de textura por px de salida, con escaneos a ~10 px/mm y el tamaño físico supuesto. */
+function paperScale(longSide, mm) {
+  const pxPerMm = longSide / (mm || 300);
   return 10 / Math.max(0.05, pxPerMm);
 }
 
@@ -264,4 +270,4 @@ function pick(arr, rand, wfn) {
   return arr[arr.length - 1];
 }
 
-module.exports = { pick, synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };
+module.exports = { physMM, pick, synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };
