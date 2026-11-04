@@ -28,10 +28,10 @@ const TECHNIQUES = [
     id: "oleo", name: "Óleo", desc: "Pinceladas cargadas sobre imprimatura, empaste en las luces",
     params: PAINT,
     variants: [
-      { id: "planos", name: "Planos y espátula", values: { intensidad: 88, grosor: 50, longitud: 38, curvatura: 45, cobertura: 100, empaste: 70, varTono: 22, varSat: 25, varLuz: 22, detalle: 55 } },
+      { id: "planos", name: "Planos y espátula", values: { intensidad: 90, grosor: 52, longitud: 40, curvatura: 35, cobertura: 100, empaste: 65, varTono: 28, varSat: 30, varLuz: 26, detalle: 50 } },
       { id: "gestual", name: "Gestual", values: { intensidad: 80, grosor: 68, longitud: 70, curvatura: 65, cobertura: 92, empaste: 45, varTono: 35, varSat: 40, varLuz: 30, detalle: 40 } },
       { id: "boceto", name: "Boceto sobre imprimatura", values: { intensidad: 70, grosor: 42, longitud: 55, curvatura: 55, cobertura: 75, empaste: 30, varTono: 18, varSat: 18, varLuz: 18, detalle: 50 } },
-      { id: "materico", name: "Matérico", values: { intensidad: 90, grosor: 55, longitud: 35, curvatura: 40, cobertura: 100, empaste: 85, varTono: 15, varSat: 12, varLuz: 25, detalle: 50 } },
+      { id: "materico", name: "Matérico", values: { intensidad: 92, grosor: 60, longitud: 45, curvatura: 50, cobertura: 100, empaste: 90, varTono: 28, varSat: 28, varLuz: 28, detalle: 45 } },
     ],
   },
   {
@@ -62,16 +62,17 @@ const TECHNIQUES = [
       { id: "capas", name: "Paisaje por capas", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 85, humedad: 50, granulado: 45, varTono: 22, varSat: 20, varLuz: 20, detalle: 50 } },
       { id: "dibujo", name: "Con dibujo", values: { intensidad: 65, grosor: 45, longitud: 40, curvatura: 50, cobertura: 75, humedad: 45, granulado: 40, varTono: 18, varSat: 15, varLuz: 15, detalle: 60 } },
       { id: "densa", name: "Densa", values: { intensidad: 92, grosor: 45, longitud: 45, curvatura: 50, cobertura: 92, humedad: 55, granulado: 60, varTono: 25, varSat: 30, varLuz: 22, detalle: 60 } },
+      { id: "gotas", name: "Gotas de agua", values: { intensidad: 82, grosor: 50, longitud: 40, curvatura: 50, cobertura: 85, humedad: 75, granulado: 45, varTono: 22, varSat: 22, varLuz: 20, detalle: 50 } },
     ],
   },
   {
-    id: "rotulador", name: "Rotulador", desc: "Bandas de ancho fijo que oscurecen al solaparse",
-    params: ["intensidad", "grosor", "longitud", "cobertura", "cruzado", "varTono", "varSat", "detalle"],
+    id: "ceras", name: "Ceras", desc: "Óleo en barra, pastel y ceras de colores sobre el grano del papel",
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle"],
     variants: [
-      { id: "moda", name: "Moda (alcohol + línea)", values: { intensidad: 80, grosor: 45, longitud: 70, cobertura: 60, cruzado: 35, varTono: 10, varSat: 20, detalle: 65 } },
-      { id: "vetas", name: "Vetas de alcohol", values: { intensidad: 75, grosor: 40, longitud: 60, cobertura: 90, cruzado: 55, varTono: 10, varSat: 15, detalle: 50 } },
-      { id: "acuarelable", name: "Acuarelables", values: { intensidad: 80, grosor: 50, longitud: 40, cobertura: 70, cruzado: 25, varTono: 15, varSat: 25, detalle: 45 } },
-      { id: "linea", name: "Línea y relleno", values: { intensidad: 70, grosor: 30, longitud: 55, cobertura: 50, cruzado: 40, varTono: 15, varSat: 15, detalle: 70 } },
+      { id: "barra", name: "Óleo en barra", values: { intensidad: 88, grosor: 58, longitud: 45, curvatura: 50, cobertura: 95, empaste: 70, cruzado: 25, varTono: 25, varSat: 25, varLuz: 22, detalle: 45 } },
+      { id: "pastelgraso", name: "Pastel graso", values: { intensidad: 80, grosor: 48, longitud: 40, curvatura: 55, cobertura: 92, empaste: 35, cruzado: 40, varTono: 28, varSat: 28, varLuz: 22, detalle: 55 } },
+      { id: "pastelseco", name: "Pastel seco", values: { intensidad: 70, grosor: 55, longitud: 45, curvatura: 45, cobertura: 90, empaste: 5, cruzado: 35, varTono: 22, varSat: 20, varLuz: 25, detalle: 50 } },
+      { id: "manley", name: "Ceras Manley", values: { intensidad: 78, grosor: 35, longitud: 55, curvatura: 40, cobertura: 88, empaste: 12, cruzado: 55, varTono: 18, varSat: 22, varLuz: 15, detalle: 55 } },
     ],
   },
   {
@@ -82,16 +83,6 @@ const TECHNIQUES = [
       { id: "equilibrada", name: "Equilibrada", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 62, empaste: 12, cruzado: 35, varTono: 15, varSat: 15, varLuz: 15, detalle: 60 } },
       { id: "masgouache", name: "Más gouache", values: { intensidad: 70, grosor: 50, longitud: 38, curvatura: 50, cobertura: 85, empaste: 15, cruzado: 25, varTono: 15, varSat: 15, varLuz: 15, detalle: 55 } },
       { id: "manchas", name: "Manchas sueltas", values: { intensidad: 75, grosor: 55, longitud: 35, curvatura: 50, cobertura: 55, empaste: 10, cruzado: 30, varTono: 22, varSat: 22, varLuz: 18, detalle: 60 } },
-    ],
-  },
-  {
-    id: "mixta", name: "Mixta total", desc: "Collage, gouache, tinta, ceras e impresión en la misma lámina",
-    params: ["intensidad", "grosor", "longitud", "cobertura", "granulado", "varTono", "varSat", "detalle"],
-    variants: [
-      { id: "cuaderno", name: "Cuaderno", values: { intensidad: 70, grosor: 40, longitud: 50, cobertura: 55, granulado: 40, varTono: 15, varSat: 20, detalle: 65 } },
-      { id: "collage", name: "Collage", values: { intensidad: 75, grosor: 45, longitud: 45, cobertura: 85, granulado: 55, varTono: 15, varSat: 15, detalle: 55 } },
-      { id: "cartel", name: "Cartel", values: { intensidad: 85, grosor: 55, longitud: 40, cobertura: 95, granulado: 45, varTono: 20, varSat: 35, detalle: 50 } },
-      { id: "impresion", name: "Impresión", values: { intensidad: 80, grosor: 45, longitud: 45, cobertura: 85, granulado: 75, varTono: 10, varSat: 20, detalle: 55 } },
     ],
   },
   {

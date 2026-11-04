@@ -20,7 +20,7 @@ const out = process.argv[2] || ".";
   await page.click("#techs .tech:nth-child(4)");
   await page.waitForFunction(() => /Acuarela · vista previa/.test(document.getElementById("pvStatus").textContent), null, { timeout: 30000 });
   ok(await page.$eval("#techs .tech:nth-child(4)", (e) => e.classList.contains("on")), "cambio de técnica a Acuarela y vista previa");
-  ok((await page.$$("#techs .tech")).length === 8, "8 técnicas");
+  ok((await page.$$("#techs .tech")).length === 7, "7 técnicas");
 
   // 2) arrastrar el slider de grosor
   await page.click("#tab-ajustes");

@@ -31,18 +31,10 @@ TECH = {
     "acuarela": lambda c: f'<path d="M12 3.2C9.4 7 7.4 9.6 7.4 12.4a4.6 4.6 0 0 0 9.2 0C16.6 9.6 14.6 7 12 3.2Z" {S(c)}/>'
                           f'<path d="M3.5 20.3c2.4-1.3 4.8-1.3 7.2 0s4.8 1.3 7.2 0c.9-.5 1.7-.7 2.6-.8" {S(c)}/>'
                           f'<path d="M10.2 12.8c.2 1.1.9 1.8 2 2" {S(c, 1.3)}/>',
-    # rotulador: cuerpo, punta biselada y trazo
-    "rotulador": lambda c: f'<path d="M14.5 3.8 20.2 9.5 11.4 18.3 5.7 12.6Z" {S(c)}/>'
-                           f'<path d="M5.7 12.6 3.6 18.6 5.4 20.4 11.4 18.3" {S(c)}/>'
-                           f'<path d="M12.6 5.7 18.3 11.4" {S(c)}/>',
     # mixta lápiz + gouache: lápiz cruzado sobre una mancha
     "mixtalg": lambda c: f'<path d="M4 15.5C4 11 8.5 9 12 10.2 15.8 11.5 18 15 15.5 18.5 13 21.5 4 20.5 4 15.5Z" fill="{c}" opacity="0.35" stroke="none"/>'
                          f'<path d="M17.8 3.2 20.8 6.2 9.2 17.8 5.4 18.6 6.2 14.8Z" {S(c)}/>'
                          f'<path d="M15.8 5.2 18.8 8.2" {S(c)}/>',
-    # mixta completa: recortes superpuestos y garabato
-    "mixta": lambda c: f'<rect x="3.5" y="4" width="9.5" height="9.5" rx="1" transform="rotate(-6 8 9)" {S(c)}/>'
-                       f'<rect x="10.5" y="10" width="9.5" height="9.5" rx="1" fill="{c}" opacity="0.35" stroke="none"/>'
-                       f'<path d="M4.5 18.5c2-2 3 1 5-1.2s2.6 1 4.5-.6" {S(c, 1.5)}/>',
     # xilografía: gubia y cortes
     "xilografia": lambda c: f'<rect x="3.5" y="3.5" width="17" height="17" rx="1.5" {S(c)}/>'
                             f'<path d="M6.5 8.5 17.5 7M6.5 12 17.5 10.8M6.5 15.6 13.5 14.8" {S(c, 1.6)}/>',

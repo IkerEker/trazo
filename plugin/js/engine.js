@@ -1,4 +1,4 @@
-/*! Trazo 1.4.0 · motor de pintura (generado por tools/bundle.js, no editar) */
+/*! Trazo 1.5.0 · motor de pintura (generado por tools/bundle.js, no editar) */
 (function (root) {
 "use strict";
 const __defs = {}, __cache = {};
@@ -694,36 +694,34 @@ const Seg = require("./segment.js");
 const Painter3 = require("./painter3.js");
 const Water2 = require("./watercolor2.js");
 const Xilo = require("./xilografia.js");
-const Markers = require("./rotuladores.js");
 const Mixta = require("./mixta.js");
 const K = require("./kit.js");
 
 const SUPPORT_FOR = {
-  oleo: "lienzo", gouache: "acuarela", acuarela: "acuarela", lapiz: "dibujo", rotulador: "dibujo",
-  mixtalg: "dibujo", mixta: "dibujo", xilografia: "dibujo",
+  oleo: "lienzo", gouache: "acuarela", acuarela: "acuarela", lapiz: "dibujo", ceras: "dibujo",
+  mixtalg: "dibujo", xilografia: "dibujo",
 };
 const ASSETS_FOR = {
-  oleo: ["pin_oleo", "pin_gouache", "tiles_pintura", "manchas"],
-  gouache: ["pin_gouache", "tiles_pintura", "manchas"],
+  oleo: ["pin_oleo", "pin_gouache"],
+  gouache: ["pin_gouache"],
   acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz", "ov_goteos"],
   lapiz: ["pin_lapiz", "pin_cera", "ov_grafito", "ov_carbon"],
-  rotulador: ["pin_rotulador", "pin_linea", "pin_lapiz"],
-  mixtalg: ["pin_lapiz", "pin_gouache", "tiles_pintura", "manchas"],
-  mixta: ["pin_linea", "pin_cera", "pin_gouache", "tiles_pintura", "manchas", "ov_impresion", "pin_lapiz"],
+  ceras: ["pin_barra", "pin_manley", "pin_pastel"],
+  mixtalg: ["pin_lapiz", "pin_gouache", "manchas"],
   xilografia: ["ov_madera", "ov_impresion"],
 };
 // cómo se marca el papel en lo velado
 const TOOTH = {
   oleo: ["lienzo", 0.55], gouache: ["lienzo", 0.4], acuarela: ["valles", 0.55], lapiz: ["picos", 0.8],
-  rotulador: ["picos", 0.25], mixtalg: ["picos", 0.5], mixta: ["picos", 0.35], xilografia: ["picos", 0.55],
+  ceras: ["picos", 0.45], mixtalg: ["picos", 0.5], xilografia: ["picos", 0.55],
 };
-const DETAIL = { oleo: [0.25, 0.7], gouache: [0.25, 0.7], acuarela: [0.3, 0.6], lapiz: [0.3, 0.6], rotulador: [0.06, 0.34], mixtalg: [0.2, 0.55], mixta: [0.08, 0.4], xilografia: [0.3, 0.6] };
+const DETAIL = { oleo: [0.25, 0.7], gouache: [0.25, 0.7], acuarela: [0.3, 0.6], lapiz: [0.3, 0.6], ceras: [0.25, 0.65], mixtalg: [0.2, 0.55], xilografia: [0.3, 0.6] };
 
 function flowOptions(tech, p) {
   switch (tech) {
     case "lapiz": case "mixtalg": return { flowSigma: 8 + p.grosor * 8, baseAngle: -Math.PI / 4, wander: 0.2, bias: 0.15, localBias: 0.35 };
     case "acuarela": return { flowSigma: 6 + p.grosor * 14, baseAngle: 0, wander: 0.6, bias: 0.1, localBias: 0.1 };
-    case "rotulador": case "mixta": return { flowSigma: 10 + p.grosor * 12, baseAngle: -Math.PI / 3, wander: 0.3, bias: 0.12, localBias: 0.2 };
+    case "ceras": return { flowSigma: 6 + p.grosor * 14, baseAngle: -Math.PI / 4, wander: 0.4, bias: 0.12, localBias: 0.15 };
     case "xilografia": return { flowSigma: 6 + p.grosor * 10, baseAngle: 0, wander: 0.3, bias: 0.1, localBias: 0.15 };
     case "gouache": return { flowSigma: 4 + p.grosor * 16, baseAngle: 0, wander: 0.55, bias: 0.08, localBias: 0.08 };
     default: return { flowSigma: 3 + p.grosor * 15, baseAngle: 0, wander: 0.5, bias: 0.08, localBias: 0.06 };
@@ -747,7 +745,7 @@ async function render(input, opts, hooks) {
   ctx.strokesOf = (names) => strokesOf(assets, names);
   ctx.paperPrep = opts.support ? Lib.preparePaper(opts.support) : null;
   // biblioteca de pinceladas principal de la técnica
-  const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_gouache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], rotulador: ["pin_rotulador"], mixtalg: ["pin_gouache"], mixta: ["pin_gouache"], xilografia: [] }[tech];
+  const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_gouache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], ceras: ["pin_manley"], mixtalg: ["pin_gouache"], xilografia: [] }[tech];
   ctx.lib = strokesOf(assets, mainLib) || (opts.library && opts.library.kind === "strokes" ? opts.library : null);
 
   clock.stage(0, 0.05, "Analizando la imagen");
@@ -755,14 +753,14 @@ async function render(input, opts, hooks) {
   clock.stage(0.05, 0.11, "Calculando la dirección de los trazos");
   await ctx.buildFlow(flowOptions(tech, p), clock);
   ctx.setSelection(opts.selection);
-  ctx.buildCoverage(p.cobertura, { lumWeight: tech === "acuarela" ? 0.7 : tech === "lapiz" || tech === "rotulador" ? 0.45 : 0.55 });
+  ctx.buildCoverage(p.cobertura, { lumWeight: tech === "acuarela" ? 0.7 : tech === "lapiz" || tech === "ceras" ? 0.45 : 0.55 });
 
   const [d0, d1] = DETAIL[tech];
   const detail = tech === "xilografia" && p.modo === "expresiva" ? 0.12 + 0.3 * p.detalle : d0 + d1 * p.detalle;
   clock.stage(0.11, 0.2, "Viendo la imagen en manchas");
   const seg = await Seg.segment(ctx, { detail }, clock);
   // etiquetas a resolución completa (el pintor por capas no las necesita)
-  const Lfull = tech === "oleo" || tech === "gouache" ? null : (clock.stage(0.2, 0.25, "Ajustando los bordes"), await Seg.fullLabels(ctx, seg, clock));
+  const Lfull = tech === "oleo" || tech === "gouache" || tech === "ceras" ? null : (clock.stage(0.2, 0.25, "Ajustando los bordes"), await Seg.fullLabels(ctx, seg, clock));
   const end = opts.paper ? 0.88 : 0.95;
 
   let paint;
@@ -783,17 +781,11 @@ async function render(input, opts, hooks) {
   } else if (tech === "xilografia") {
     clock.stage(0.25, end, "Tallando y estampando");
     paint = await Xilo.paint(ctx, p, seg, Lfull, clock);
-  } else if (tech === "rotulador") {
-    clock.stage(0.25, end, "Pintando con rotulador");
-    paint = await Markers.paint(ctx, p, seg, Lfull, clock);
   } else if (tech === "mixtalg") {
     clock.stage(0.25, end, "Lápiz y gouache");
     paint = await Mixta.paintLG(ctx, p, seg, Lfull, clock);
-  } else if (tech === "mixta") {
-    clock.stage(0.25, end, "Collage y técnica mixta");
-    paint = await Mixta.paintCollage(ctx, p, seg, Lfull, clock);
   } else {
-    clock.stage(0.2, 0.84, "Pintando");
+    clock.stage(0.2, 0.84, tech === "ceras" ? "Pintando con ceras" : "Pintando");
     const planes = await Painter3.paint(ctx, tech, p, seg, clock);
     clock.stage(0.84, end, "Acabado");
     paint = await Painter.finish(ctx, tech, p, planes, clock);
@@ -807,7 +799,7 @@ async function render(input, opts, hooks) {
   let paper = null;
   if (opts.paper) {
     clock.stage(end + 0.03, 0.98, "Preparando el papel");
-    paper = await Paper.makePaper(tech, ctx.W, ctx.H, seed, clock, ctx.paperPrep);
+    paper = await Paper.makePaper(tech, ctx.W, ctx.H, seed, clock, ctx.paperPrep, p.modo);
   }
   clock.stage(1, 1, "Listo");
   return { paint, paper, width: ctx.W, height: ctx.H };
@@ -1374,16 +1366,11 @@ module.exports = { pick, synthetic, parse, prepare, sampleAt, rowAt, mip, prepar
 };
 __defs["mixta.js"] = function (module, exports, require) {
 /*
- * Trazo · Técnicas mixtas
+ * Trazo · Mixta lápiz + gouache
  *
- * paintLG — Lápiz + gouache: dibujo a lápiz completo; gouache opaco en una parte
- *   de las zonas, desalineado de la línea y con borde irregular (o con manchas
- *   reales sueltas); y la línea de lápiz otra vez por encima, muy presente.
- *
- * paintCollage — Mixta completa: cada zona con un material distinto que no se
- *   integra con el resto: recortes de la propia foto pasados por filtros de
- *   impresión (fotocopia, trama de puntos, risografía), planos de gouache,
- *   ceras y línea de tinta. Variantes: cuaderno, collage, cartel, impresión.
+ * paintLG — dibujo a lápiz completo; gouache opaco en una parte de las zonas,
+ *   desalineado de la línea y con borde irregular (o con manchas reales
+ *   sueltas); y la línea de lápiz otra vez por encima, suelta.
  */
 const C = require("./core.js");
 const S = require("./strokes.js");
@@ -1392,7 +1379,6 @@ const Painter = require("./painter.js");
 const Painter3 = require("./painter3.js");
 const Pencil = require("./pencil.js");
 const K = require("./kit.js");
-const M = require("./rotuladores.js");
 
 /* ---------- gouache completo (RGBA) ---------- */
 async function gouacheLayer(ctx, p, seg, Lfull, clock, modo) {
@@ -1491,137 +1477,7 @@ function luminanceAt(ctx, x, y) {
   return (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
 }
 
-async function paintCollage(ctx, p, seg, Lfull, clock) {
-  const { W, H, N, s } = ctx;
-  const reg = seg.reg;
-  const mode = p.modo;
-  const rand = C.mulberry32(ctx.seed * 41 + 9);
-  const tick = (a, b) => ({ tick: async (f) => clock.tick(a + (b - a) * f), stage() {}, report() {}, force: async () => {} });
-  const A = ctx.assets || {};
-  const imp = A.ov_impresion && A.ov_impresion.items.length ? K.overlaySampler(A.ov_impresion.items[(rand() * A.ov_impresion.items.length) | 0], W, H) : null;
-  const gran = 0.3 + 0.9 * p.granulado;
-
-  // material de cada zona
-  const W8 = { cuaderno: [0.12, 0.38, 0.15, 0.35], collage: [0.45, 0.3, 0.1, 0.15], cartel: [0.15, 0.7, 0.1, 0.05], impresion: [0.6, 0.12, 0.2, 0.08] }[mode];
-  // [impreso, gouache, cera, solo línea/papel]
-  const mat = new Int8Array(reg.n), filt = new Int8Array(reg.n), riso = new Int8Array(reg.n);
-  for (let r = 0; r < reg.n; r++) {
-    let t = rand() * (W8[0] + W8[1] + W8[2] + W8[3] * (1.4 - p.cobertura));
-    let m = 0;
-    while (m < 3 && t > W8[m]) { t -= W8[m]; m++; }
-    if (reg.lum[r] > 0.9 && m === 1) m = 3;
-    if (m === 2 && reg.cnt[r] > 0.04 * seg.aw * seg.ah) m = 1;   // las ceras, solo en zonas pequeñas y medianas
-    mat[r] = m;
-    filt[r] = mode === "cartel" ? 2 : mode === "impresion" ? (rand() < 0.5 ? 2 : (rand() < 0.5 ? 1 : 0)) : (rand() < 0.55 ? 0 : 1); // 0 fotocopia · 1 trama · 2 riso
-    riso[r] = (rand() * RISO.length) | 0;
-  }
-  // 1) gouache (planos) para las zonas de pintura
-  const gp = Object.assign({}, p, { empaste: 0.1, varSat: mode === "cartel" ? 0.6 : p.varSat, curvatura: 0.5, humedad: 0.3, cruzado: 0.3, varLuz: 0.15 });
-  const gou = await gouacheLayer(ctx, gp, seg, Lfull, tick(0, 0.4), mode === "cartel" ? "planos" : "pleinair");
-  await clock.tick(0.4);
-
-  const out = new Uint8Array(N * 4);
-  // 2) recortes impresos: papel del recorte (filo blanco) + imagen filtrada
-  const cell = Math.max(3, (3 + 6 * p.grosor) * s);
-  const ca = Math.cos(Math.PI / 4), sa = Math.sin(Math.PI / 4);
-  const edgeW = Math.max(1, Math.round(1.5 * s));
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x, o = i * 4;
-      const r = Lfull[i];
-      const m = mat[r];
-      if (m === 1) { // gouache
-        out[o] = gou[o]; out[o + 1] = gou[o + 1]; out[o + 2] = gou[o + 2]; out[o + 3] = gou[o + 3];
-        continue;
-      }
-      if (m !== 0) continue;
-      // filo del recorte: el papel asoma en el borde de la pieza
-      let edge = false;
-      for (let k = 1; k <= edgeW && !edge; k++) {
-        if ((x >= k && Lfull[i - k] !== r && mat[Lfull[i - k]] !== 0) || (x < W - k && Lfull[i + k] !== r && mat[Lfull[i + k]] !== 0) ||
-            (y >= k && Lfull[i - k * W] !== r && mat[Lfull[i - k * W]] !== 0) || (y < H - k && Lfull[i + k * W] !== r && mat[Lfull[i + k * W]] !== 0)) edge = true;
-      }
-      const paperC = filt[r] === 0 ? 0.95 : 0.93;
-      let rr = paperC, gg = paperC * 0.99, bb = paperC * 0.96, ink = 0, ir = 0.08, ig = 0.08, ib = 0.08;
-      if (!edge) {
-        const l = luminanceAt(ctx, x, y);
-        if (filt[r] === 0) {          // fotocopia: alto contraste y tóner
-          let v = C.smoothstep(0.62, 0.3, l + (C.hash2(x >> 1, y >> 1, 3) - 0.5) * 0.12 * gran);
-          if (imp) v = Math.max(v * (0.85 + 0.15 * imp(x, y)), C.smoothstep(0.35, 0.1, imp(x, y)) * 0.8 * gran);
-          ink = v;
-        } else if (filt[r] === 1) {   // trama de puntos a 45°
-          const u = (x * ca + y * sa) / cell, v2 = (-x * sa + y * ca) / cell;
-          const fu = u - Math.floor(u) - 0.5, fv = v2 - Math.floor(v2) - 0.5;
-          const d = Math.sqrt(fu * fu + fv * fv);
-          const rad = Math.sqrt(C.clamp(1 - l, 0, 1)) * 0.62;
-          ink = C.clamp((rad - d) * cell * 0.9 + 0.5, 0, 1);
-        } else {                      // risografía: una tinta, 3 tonos, grano y desregistro
-          const c = RISO[riso[r]];
-          ir = c[0]; ig = c[1]; ib = c[2];
-          const l2 = luminanceAt(ctx, C.clamp(x - 2 * s, 0, W - 1), C.clamp(y - 1 * s, 0, H - 1));
-          const lev = l2 < 0.33 ? 1 : l2 < 0.6 ? 0.62 : l2 < 0.82 ? 0.3 : 0;
-          ink = lev * (1 - gran * 0.45 * C.smoothstep(0.6, 1, C.hash2(x, y, 9)));
-          if (imp) ink *= 0.8 + 0.2 * imp(x, y);
-        }
-      }
-      rr = rr * (1 - ink) + ir * ink; gg = gg * (1 - ink) + ig * ink; bb = bb * (1 - ink) + ib * ink;
-      out[o] = rr * 255 + 0.5; out[o + 1] = gg * 255 + 0.5; out[o + 2] = bb * 255 + 0.5; out[o + 3] = 255;
-    }
-    if ((y & 31) === 0) await clock.tick(0.4 + 0.25 * y / H);
-  }
-  // sombra mínima bajo los recortes (relieve del papel pegado)
-  {
-    const sh = new Float32Array(N), tmp = new Float32Array(N);
-    const d = Math.max(1, Math.round(1.6 * s));
-    for (let y = d; y < H; y++) for (let x = d; x < W; x++) if (mat[Lfull[(y - d) * W + x - d]] === 0) sh[y * W + x] = 1;
-    C.boxBlurH(sh, tmp, W, H, d); C.boxBlurV(tmp, sh, W, H, d);
-    for (let i = 0; i < N; i++) {
-      if (mat[Lfull[i]] === 0 || sh[i] < 0.02) continue;
-      const o = i * 4, a = sh[i] * 0.25;
-      const da = out[o + 3] / 255, oa = a + da * (1 - a);
-      for (let c = 0; c < 3; c++) out[o + c] = (20 * a + out[o + c] * da * (1 - a)) / oa;
-      out[o + 3] = oa * 255;
-    }
-  }
-  await clock.tick(0.68);
-
-  // 3) ceras: bandas de cera de color, sueltas
-  const cera = (ctx.strokesOf(["pin_cera"]) || { samples: Lib.synthetic("cera") }).samples;
-  const Tr = new Float32Array(N).fill(1), Tg = new Float32Array(N).fill(1), Tb = new Float32Array(N).fill(1);
-  const raster = new S.StrokeRaster(W, H), path = new S.StrokePath();
-  const col = new Float32Array(3);
-  const Wc = Math.max(2, (4 + 10 * p.grosor) * s);
-  for (let r = 0; r < reg.n; r++) {
-    if (mat[r] !== 2) continue;
-    M.markerColor(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2], 1.6, col);
-    const bands = M.scanBands(ctx, seg, r, -Math.PI / 4 + (rand() - 0.5) * 1.0, Wc * 1.5, Wc * 1.5, null, rand);
-    for (const bd of bands) {
-      if (rand() < 0.35) continue;
-      M.drawBand(ctx, raster, path, cera, rand, bd[0], bd[1], bd[2], bd[3], Wc * (0.7 + 0.5 * rand()), Wc * 0.5, (g, a) => {
-        const aa = a * (0.4 + 0.3 * p.intensidad);
-        Tr[g] *= 1 - aa * (1 - col[0]); Tg[g] *= 1 - aa * (1 - col[1]); Tb[g] *= 1 - aa * (1 - col[2]);
-      });
-    }
-  }
-  // 4) línea de tinta (y lápiz en cuaderno) por encima
-  const ink = (ctx.strokesOf(["pin_linea"]) || { samples: Lib.synthetic("lapiz") }).samples;
-  await M.drawContours(ctx, seg, Lfull, {
-    lib: ink, width: Math.max(0.9, (0.8 + 2.4 * p.grosor) * s * (mode === "cartel" ? 1.3 : 1)), opacity: 0.85,
-    density: { cuaderno: 0.55, collage: 0.35, cartel: 0.5, impresion: 0.25 }[mode],
-    thr: { cuaderno: 0.12, collage: 0.35, cartel: 0.25, impresion: 0.45 }[mode] - 0.12 * p.detalle, impK: 0.9,
-    segLen: (50 + 160 * p.longitud) * s, gap: 4, overshoot: 0.08,
-    apply: (g, a) => { Tr[g] *= 1 - a * 0.94; Tg[g] *= 1 - a * 0.94; Tb[g] *= 1 - a * 0.93; },
-  }, tick(0.72, 0.95));
-  K.multU8(out, K.transToRGBA(Tr, Tg, Tb));
-  if (mode === "cuaderno") {
-    const lines = await Pencil.paint(ctx, Object.assign({}, p, { modo: "linea", curvatura: 0.6, cruzado: 0.3 }), tick(0.95, 0.99), seg, Lfull, { lib: ctx.strokesOf(["pin_lapiz"]), only: "contornos", contourMul: 0.8 });
-    K.multU8(out, lines);
-  }
-  if (ctx.selFull) for (let i = 0; i < N; i++) out[i * 4 + 3] = out[i * 4 + 3] * ctx.selFull[i] / 255;
-  return out;
-}
-
-module.exports = { paintLG, paintCollage };
+module.exports = { paintLG };
 
 };
 __defs["painter.js"] = function (module, exports, require) {
@@ -2170,6 +2026,7 @@ const C = require("./core.js");
 const S = require("./strokes.js");
 const Lib = require("./library.js");
 const Seg = require("./segment.js");
+const K = require("./kit.js");
 
 const BODY = 0.7, VK = 0.9;
 
@@ -2254,37 +2111,79 @@ function snapEdges(src, w, h, iters, dist, thr) {
 }
 
 /* ---------- configuración por técnica y variante ---------- */
+// Todas las variantes parten de la misma idea: pinceladas decididas, pocas capas
+// (la foto no se calca) y color que vibra entre trazos.
 function config(kind, p, s) {
   const m = p.modo;
   let c;
+  const L = (k) => 2 + Math.round(p.detalle * k); // capas según el detalle
   if (kind === "oleo") {
     c = {
-      R0: (3.2 + p.grosor * 24) * s, layers: 3 + Math.round(p.detalle * 1.2), ratio: 0.5,
+      R0: (3.2 + p.grosor * 24) * s, layers: L(1.2), ratio: 0.5,
       Lk: 4 + p.longitud * 12, curv: 0.12 + 0.8 * p.curvatura,
-      op: 0.88 + 0.12 * p.intensidad, wet: 0.2, thick: 0.25 + 0.75 * p.empaste,
-      sK: 0.6 + 0.8 * p.empaste, dual: 0.55, varK: 1,
-      tolStop: 0.34 + 0.22 * (1 - p.detalle), tolClip: 0.5, lost: 0.9, refineT: 0.32 - 0.16 * p.detalle,
-      minLenK: 2.6, planeK: 0.15, steps: 0, earth: 0, satK: 1.06, lechoso: 0, sink: 0,
+      op: 0.88 + 0.12 * p.intensidad, wet: 0.22, thick: 0.25 + 0.75 * p.empaste,
+      sK: 0.6 + 0.8 * p.empaste, dual: 0.6, varK: 1.2, ridge: 0.35,
+      tolStop: 0.34 + 0.22 * (1 - p.detalle), tolClip: 0.5, lost: 1.1, refineT: 0.32 - 0.16 * p.detalle,
+      minLenK: 2.6, planeK: 0.1, steps: 0, earth: 0, satK: 1.1, lechoso: 0, sink: 0,
       ground: 0, groundShow: 0, baseOp: 1, cov0: 0.82, gloss: 0.3, shade: 1, canvasTex: 0.5,
-      paperBreak: 0, chalk: false, libs: ["pin_oleo", "pin_gouache"], dirJit: 0.18, edgeN: 0.42, edgeT: 0.9, temp: 0.06, reliefK: 0.5,
+      paperBreak: 0, chalk: false, libs: ["pin_oleo", "pin_gouache"], dirJit: 0.22, edgeN: 0.42, edgeT: 0.9, temp: 0.06, reliefK: 0.5,
+      tools: null, hBlur: 1.6,
     };
-    if (m === "gestual") Object.assign(c, { R0: c.R0 * 1.3, Lk: c.Lk * 1.45, curv: Math.min(1, c.curv * 1.4 + 0.1), wet: 0.32, varK: 1.6, dual: 0.8, satK: 1.15, lost: 1.5, planeK: 0, layers: c.layers - 1, dirJit: 0.32 });
-    if (m === "boceto") Object.assign(c, { ground: 1, groundShow: 0.55, thick: c.thick * 0.35, op: c.op * 0.86, cov0: 0.6, wet: 0.12, layers: Math.max(2, c.layers - 1), sK: c.sK * 0.6, lost: 1.6, gloss: 0.12, canvasTex: 0.75, planeK: 0.3 });
-    if (m === "materico") Object.assign(c, { thick: Math.min(1.4, c.thick * 1.7 + 0.15), sK: c.sK * 1.35, earth: 0.35, satK: 0.95, Lk: c.Lk * 0.7, R0: c.R0 * 1.1, planeK: 0.35, wet: 0.12, gloss: 0.38, dual: 0.4 });
-  } else {
+    // gestual: el punto de partida que funciona (decidido, abstracto)
+    if (m === "gestual") Object.assign(c, { R0: c.R0 * 1.3, Lk: c.Lk * 1.45, curv: Math.min(1, c.curv * 1.4 + 0.1), wet: 0.32, varK: 1.6, dual: 0.8, satK: 1.15, lost: 1.5, planeK: 0, layers: 2 + Math.round(p.detalle * 0.8), dirJit: 0.32 });
+    // planos y espátula: pincel ancho para encajar y espátula para construir los planos
+    if (m === "planos") Object.assign(c, { R0: c.R0 * 1.25, layers: L(1.2), tools: ["brush", "knife", "knife", "knife"], curv: 0.06, dirJit: 0.5, Lk: c.Lk * 0.9,
+      knifeLk: 2.2 + p.longitud * 4, varK: 1.4, dual: 0.75, satK: 1.12, lost: 1.3, planeK: 0.35, thick: 0.5 + 0.6 * p.empaste, reliefK: 0.75, gloss: 0.4, wet: 0.15, hBlur: 1.0 });
+    if (m === "boceto") Object.assign(c, { R0: c.R0 * 1.15, ground: 1, groundShow: 0.55, thick: c.thick * 0.35, op: c.op * 0.86, cov0: 0.6, wet: 0.12, layers: Math.max(2, c.layers - 1), sK: c.sK * 0.6, lost: 1.6, gloss: 0.12, canvasTex: 0.75, planeK: 0.2, varK: 1.3 });
+    // matérico: pocas pinceladas grandes muy cargadas; el relieve lo hace cada trazo (crestas y surcos)
+    if (m === "materico") Object.assign(c, { R0: c.R0 * 1.35, Lk: c.Lk * 1.15, layers: 2 + Math.round(p.detalle * 0.9), thick: 0.7 + 0.7 * p.empaste, sK: 1.0 + 0.9 * p.empaste, ridge: 1.0,
+      wet: 0.3, dual: 0.85, varK: 1.4, satK: 1.12, lost: 1.4, planeK: 0.05, reliefK: 1.0, hBlur: 0.9, gloss: 0.45, canvasTex: 0.2, dirJit: 0.3, curv: Math.min(1, c.curv * 1.2) });
+  } else if (kind === "gouache") {
     c = {
-      R0: (3 + p.grosor * 22) * s, layers: 3 + Math.round(p.detalle * 1.2), ratio: 0.5,
+      R0: (3 + p.grosor * 22) * s, layers: L(1.2), ratio: 0.5,
       Lk: 3.5 + p.longitud * 10, curv: 0.1 + 0.7 * p.curvatura,
       op: 0.94 + 0.06 * p.intensidad, wet: 0.06, thick: 0.12 + 0.3 * p.empaste,
-      sK: 0.35 + 0.45 * p.empaste, dual: 0.35, varK: 0.8,
-      tolStop: 0.3 + 0.2 * (1 - p.detalle), tolClip: 0.42, lost: 0.6, refineT: 0.3 - 0.15 * p.detalle,
-      minLenK: 2.4, planeK: 0.35, steps: 0, earth: 0, satK: 1.06, lechoso: 0.03, sink: 0,
+      sK: 0.35 + 0.45 * p.empaste, dual: 0.4, varK: 1.0, ridge: 0.15,
+      tolStop: 0.3 + 0.2 * (1 - p.detalle), tolClip: 0.42, lost: 0.9, refineT: 0.3 - 0.15 * p.detalle,
+      minLenK: 2.4, planeK: 0.35, steps: 0, earth: 0, satK: 1.08, lechoso: 0.03, sink: 0,
       ground: 0, groundShow: 0, baseOp: 1, cov0: 0.85, gloss: 0, shade: 0.55, canvasTex: 0.3,
-      paperBreak: 0.6, chalk: true, libs: ["pin_gouache"], dirJit: 0.15, edgeN: 0.35, edgeT: 0.7, temp: 0.045, reliefK: 0.6,
+      paperBreak: 0.7, chalk: true, libs: ["pin_gouache"], dirJit: 0.2, edgeN: 0.35, edgeT: 0.7, temp: 0.05, reliefK: 0.6,
+      tools: null, hBlur: 1.6,
     };
-    if (m === "planos") Object.assign(c, { planeK: 0.85, steps: 5, lechoso: 0.05, Lk: c.Lk * 0.85, curv: c.curv * 0.5, lost: 0.25, varK: 0.45, dual: 0.15, tolClip: 0.34, sK: c.sK * 0.6, dirJit: 0.08 });
-    if (m === "expresivo") Object.assign(c, { R0: c.R0 * 1.25, Lk: c.Lk * 1.3, sink: 0.7, satK: 1.18, lechoso: 0.04, varK: 1.4, dual: 0.6, lost: 1.4, planeK: 0.2, layers: c.layers - 1, paperBreak: 0.9, dirJit: 0.3 });
+    if (m === "pleinair") Object.assign(c, { R0: c.R0 * 1.15, varK: 1.3, temp: 0.07, dual: 0.5, edgeN: 0.45 });
+    // planos opacos: valores por planos, pero cada plano hecho con brochazos planos visibles y filo seco
+    if (m === "planos") Object.assign(c, { R0: c.R0 * 1.45, planeK: 0.7, steps: 4, lechoso: 0.03, Lk: c.Lk * 1.2, curv: 0.15, lost: 1.3, varK: 1.5, dual: 0.55, tolClip: 0.52,
+      dirJit: 0.45, paperBreak: 1.0, edgeN: 0.6, edgeT: 1.0, sK: c.sK * 1.1, satK: 1.15, temp: 0.08, layers: 2 + Math.round(p.detalle * 0.9) });
+    // retrato expresivo: gestual, color subido, pincel seco y papel entre trazos
+    if (m === "expresivo") Object.assign(c, { R0: c.R0 * 1.5, Lk: c.Lk * 1.6, curv: Math.min(1, c.curv * 1.4 + 0.12), sink: 0, satK: 1.25, lechoso: 0.02, varK: 2.0, dual: 0.9,
+      lost: 1.8, tolClip: 0.55, planeK: 0, layers: 2 + Math.round(p.detalle * 0.7), paperBreak: 1.2, dirJit: 0.4, wet: 0.16, temp: 0.1, cov0: 0.72, edgeN: 0.6, edgeT: 1.1, sK: c.sK * 1.2 });
     if (m === "diluido") Object.assign(c, { op: 0.72 + 0.1 * p.intensidad, baseOp: 0.55, lechoso: 0.05, thick: c.thick * 0.4, sK: c.sK * 0.6, lost: 1.1, planeK: 0.25, paperBreak: 1, cov0: 0.7, wet: 0.14, layers: Math.max(2, c.layers - 1) });
+  } else {
+    // ceras de colores: sin capa base; el color se queda en los picos del papel
+    c = {
+      R0: (2.4 + p.grosor * 15) * s, layers: L(1.1), ratio: 0.55,
+      Lk: 7 + p.longitud * 16, curv: 0.05 + 0.5 * p.curvatura,
+      op: 0.96, wet: 0, thick: 0.1 + 0.3 * p.empaste,
+      sK: 0.5, dual: 0.3, varK: 1.1, ridge: 0.2,
+      tolStop: 0.4 + 0.2 * (1 - p.detalle), tolClip: 0.55, lost: 1.1, refineT: 0.36 - 0.14 * p.detalle,
+      minLenK: 3.5, planeK: 0.3, steps: 0, earth: 0, satK: 1.15, lechoso: 0, sink: 0,
+      ground: 0, groundShow: 0, baseOp: 0, cov0: 0.6, gloss: 0, shade: 0.5, canvasTex: 0,
+      paperBreak: 0, chalk: false, libs: ["pin_manley"], dirJit: 0.15, edgeN: 0.3, edgeT: 0.6, temp: 0.03, reliefK: 0.5,
+      tools: null, hBlur: 1.2, media: "cera", tooth: 0.75, press: 0.22 + 0.36 * p.intensidad, palK: 0, palN: 16, paperWhite: 0.86, sparse: 0.45,
+      hand: -Math.PI / 4, handK: 0.35, cross: p.cruzado || 0, smudge: 0,
+    };
+    // óleo en barra: pasta espesa y untuosa, apenas deja ver el papel
+    if (m === "barra") Object.assign(c, { libs: ["pin_barra"], R0: c.R0 * 1.45, Lk: c.Lk * 0.75, tooth: 0.3, paperWhite: 0.97, sparse: 0.15, thick: 0.6 + 0.8 * p.empaste, sK: 1.1, ridge: 0.8, wet: 0.3,
+      gloss: 0.3, reliefK: 1.0, shade: 1.0, handK: 0.15, dual: 0.55, varK: 1.3, hBlur: 0.9 });
+    // pastel graso: cubriente, se arrastra y mezcla; algo de grano
+    if (m === "pastelgraso") Object.assign(c, { libs: ["pin_barra", "pin_manley"], R0: c.R0 * 1.1, tooth: 0.5, thick: 0.25 + 0.4 * p.empaste, sK: 0.7, ridge: 0.4, wet: 0.35,
+      gloss: 0.12, reliefK: 0.7, handK: 0.25, dual: 0.5, palK: 0.35 });
+    // pastel seco: polvo de color, de canto en los fondos, difuminado con el dedo
+    if (m === "pastelseco") Object.assign(c, { libs: ["pin_pastel", "pin_barra"], R0: c.R0 * 1.3, tooth: 0.8, op: 0.88, thick: 0, ridge: 0, sK: 0.35, wet: 0.08, chalk: true,
+      lechoso: 0.05, satK: 1.05, smudge: 0.55 + 0.3 * (1 - p.intensidad), handK: 0.3, palK: 0.25, reliefK: 0.3 });
+    // ceras escolares (Manley): trazo estrecho, rayado a mano, caja de colores limitada, mucho grano
+    if (m === "manley") Object.assign(c, { libs: ["pin_manley"], R0: c.R0 * 0.75, tooth: 0.92, op: 0.88, sparse: 0.6, thick: 0.08, sK: 0.4, ridge: 0.1, wet: 0, gloss: 0.06, handK: 0.55,
+      palK: 0.85, palN: 14, satK: 1.3, layers: L(1.3), minLenK: 5 });
   }
   return c;
 }
@@ -2353,6 +2252,19 @@ async function paint(ctx, kind, p, seg, clock) {
   for (const nm of cfg.libs) { const a = ctx.assets && ctx.assets[nm]; if (a && a.kind === "strokes") lib = lib.concat(a.samples); }
   if (!lib.length) lib = Lib.synthetic(kind);
   const pap = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
+  // ceras: el grano del papel se calcula una vez por píxel (se consulta muchísimas veces)
+  let toothMap = null;
+  if (cfg.media) {
+    toothMap = new Uint8Array(N);
+    const grainT = pap ? null : C.makeGrainTile(ctx.seed + 3, "tooth"), gInv = 1 / Math.max(1, Math.sqrt(s) * 0.9);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) toothMap[y * W + x] = ((pap ? pap.eqN(x, y) : C.tileAt(grainT, x * gInv, y * gInv)) * 255 + 0.5) | 0;
+      if ((y & 63) === 0) await clock.tick(0.02);
+    }
+  }
+  // caja de colores (ceras): paleta limitada sacada de la imagen
+  const pal = cfg.palK ? K.palette(ctx, cfg.palN, ctx.seed, {}) : null;
+  if (pal) for (let k = 0; k < pal.K; k++) { const l = 0.299 * pal.r[k] + 0.587 * pal.g[k] + 0.114 * pal.b[k]; pal.r[k] = C.clamp(l + (pal.r[k] - l) * 1.25, 0, 1); pal.g[k] = C.clamp(l + (pal.g[k] - l) * 1.25, 0, 1); pal.b[k] = C.clamp(l + (pal.b[k] - l) * 1.25, 0, 1); }
   const col = new Float32Array(3), col2 = new Float32Array(3), base = new Float32Array(3), tmp = new Float32Array(3), ts = new Float32Array(2);
   const stripes = new Float32Array(64), jit = new Float32Array(66), tanX = new Float32Array(64), tanY = new Float32Array(64);
   const raster = new S.StrokeRaster(W, H);
@@ -2456,6 +2368,7 @@ async function paint(ctx, kind, p, seg, clock) {
     for (const sign of [1, -1]) {
       ctx.flowAt(x0, y0, _f, o.fine);
       let dx = _f[0] * o.ca - _f[1] * o.sa, dy = _f[0] * o.sa + _f[1] * o.ca;
+      if (o.handK) { dx += (o.hx - dx) * o.handK; dy += (o.hy - dy) * o.handK; const dm = Math.sqrt(dx * dx + dy * dy) || 1; dx /= dm; dy /= dm; }
       if (sign < 0) { dx = -dx; dy = -dy; }
       let x = x0, y = y0, len = 0, n = 0;
       const budget = sign > 0 ? o.Lmax * (0.35 + 0.3 * rand()) : o.Lmax - nf * step;
@@ -2463,6 +2376,7 @@ async function paint(ctx, kind, p, seg, clock) {
       while (len < budget && n < S.MAXPTS / 2 - 2) {
         ctx.flowAt(x, y, _f, o.fine);
         let fx = _f[0] * o.ca - _f[1] * o.sa, fy = _f[0] * o.sa + _f[1] * o.ca;
+        if (o.handK) { fx += (o.hx - fx) * o.handK; fy += (o.hy - fy) * o.handK; const fm = Math.sqrt(fx * fx + fy * fy) || 1; fx /= fm; fy /= fm; }
         if (fx * dx + fy * dy < 0) { fx = -fx; fy = -fy; }
         let nx = dx + (fx - dx) * o.curv, ny = dy + (fy - dy) * o.curv;
         const mm = Math.sqrt(nx * nx + ny * ny) || 1;
@@ -2525,6 +2439,9 @@ async function paint(ctx, kind, p, seg, clock) {
     const br0 = (cbase[0] * 255 + 0.5) | 0, bg0 = (cbase[1] * 255 + 0.5) | 0, bb0 = (cbase[2] * 255 + 0.5) | 0, inv3 = 1 / 255;
     const pr8 = (cr * 255 + 0.5) | 0, pg8 = (cg * 255 + 0.5) | 0, pb8 = (cb * 255 + 0.5) | 0;
     const sK = cfg.sK, wet = cfg.wet, pbk = cfg.paperBreak && pap ? cfg.paperBreak : 0;
+    const tooth = cfg.tooth || 0, ridge = cfg.ridge || 0, bcT = cfg.media ? 0.25 : 0.45;
+    // presión: más fuerte en los colores oscuros y distinta en cada trazo
+    const press = cfg.press ? cfg.press * (0.8 + 0.4 * rand()) * (0.75 + 0.45 * (1 - (0.299 * cr + 0.587 * cg + 0.114 * cb))) : 1;
     const A = raster.A, U = raster.U, V = raster.V, tl = raster.tl, tg = raster.tg;
     for (let t = 0; t < nt; t++) {
       const li = tl[t], g = tg[t];
@@ -2549,6 +2466,15 @@ async function paint(ctx, kind, p, seg, clock) {
         const l3 = (ly * W + lx) * 3;
         const d = (Math.abs(clip[l3] - br0) + Math.abs(clip[l3 + 1] - bg0) + Math.abs(clip[l3 + 2] - bb0)) * inv3;
         if (d > tc0) { a *= d >= tc1 ? 0 : 1 - C.smoothstep(tc0, tc1, d); if (a < 0.004) continue; }
+      }
+      // ceras: el color se queda en los picos del papel (más presión, menos huecos)
+      if (tooth > 0) {
+        const gr = toothMap[g] * (1 / 255);
+        // la punta aprieta más en el centro y deja vetas a lo largo del trazo
+        const pr = press * (0.7 + 0.3 * ts[0]) * (0.78 + 0.22 * (1 - v * v) + (stripes[((v + 1) * 31.5) | 0] - 0.5) * 0.35);
+        const e0 = 0.8 - pr, tt = (gr - e0) * 3.3333;
+        a *= 1 - tooth + tooth * (tt <= 0 ? 0 : tt >= 1 ? 1 : tt * tt * (3 - 2 * tt));
+        if (a < 0.004) continue;
       }
       // pincel seco: el borde parcial se rompe sobre el grano del papel
       if (pbk > 0 && ts[0] < 0.92) {
@@ -2579,8 +2505,87 @@ async function paint(ctx, kind, p, seg, clock) {
       Cv[g] = cv * ia + a;
       const a8 = (a * 255) | 0;
       if (a8 > Sc[g]) Sc[g] = a8;
+      if (a > bcT) { Bc[o3] = br0; Bc[o3 + 1] = bg0; Bc[o3 + 2] = bb0; Pc[o3] = pr8; Pc[o3 + 1] = pg8; Pc[o3 + 2] = pb8; }
+      if (thick > 0) {
+        // relieve de la pincelada: cuerpo, surcos de las cerdas y crestas en los bordes
+        const av = v < 0 ? -v : v;
+        const rg = ridge * C.smoothstep(0.5, 0.82, av) * (1 - C.smoothstep(0.86, 1, av));
+        Hh[g] = Hh[g] * (1 - a * 0.85) + a * thick * (0.45 + 0.55 * ts[0] + 0.35 * ts[1] * C.smoothstep(0.5, 0.95, ts[0]) + rg);
+      }
+    }
+    raster.clear();
+  }
+
+
+  /* --- espátula: plano de pasta de borde recto, con vetas de dos colores, raspados y crestas --- */
+  const endE = new Float32Array(64), skS = new Float32Array(64);
+  function renderKnife(R, c, cbase, opacity, thick, tolC) {
+    const n = path.n;
+    if (n < 2 || path.len < 1) return;
+    for (let i = 0; i < n; i++) path.rs[i] = R;
+    const nt = raster.rasterize(path, 0.02);
+    if (nt === 0) return;
+    const cr = c[0], cg = c[1], cb = c[2];
+    C.varyColor(cr, cg, cb, (rand() - 0.5) * 0.4 * (0.3 + p.varTono) * cfg.varK, (rand() - 0.5) * 0.3, (rand() < 0.5 ? -1 : 1) * (0.05 + 0.1 * rand()) * cfg.varK, col2);
+    const c2r = col2[0], c2g = col2[1], c2b = col2[2];
+    const mixAmt = Math.min(0.9, cfg.dual * (0.45 + 0.55 * rand()));
+    const ph = rand() * 6.28, f1 = 1.5 + rand() * 3, f2 = 0.6 + rand() * 1.4, Lr = path.len / R;
+    let pv = rand(), pe = rand(), ps = rand();
+    for (let q = 0; q < 64; q++) {
+      pv = pv * 0.6 + rand() * 0.4; stripes[q] = pv;
+      pe = pe * 0.7 + rand() * 0.3; endE[q] = 0.9 + 0.1 * pe;          // filo trasero irregular (al levantar)
+      ps = ps * 0.45 + rand() * 0.55; skS[q] = ps;                      // vetas raspadas
+    }
+    const skipK = 0.25 + 0.45 * rand();
+    for (let q = 0, i = 0; q < 64; q++) {
+      const sq = q / 63 * path.len;
+      while (i < n - 2 && path.ss[i + 1] < sq) i++;
+      let dx = path.xs[i + 1] - path.xs[i], dy = path.ys[i + 1] - path.ys[i];
+      const m = Math.sqrt(dx * dx + dy * dy) || 1;
+      tanX[q] = dx / m; tanY[q] = dy / m;
+    }
+    const tc0 = tolC * 0.85, tc1 = tolC * 1.2, near = tc0 * 255 * 0.12, ampN = R * 0.12, ampT = R * 0.25;
+    const br0 = (cbase[0] * 255 + 0.5) | 0, bg0 = (cbase[1] * 255 + 0.5) | 0, bb0 = (cbase[2] * 255 + 0.5) | 0, inv3 = 1 / 255;
+    const pr8 = (cr * 255 + 0.5) | 0, pg8 = (cg * 255 + 0.5) | 0, pb8 = (cb * 255 + 0.5) | 0;
+    const A = raster.A, U = raster.U, V = raster.V, tl = raster.tl, tg = raster.tg;
+    for (let t = 0; t < nt; t++) {
+      const li = tl[t], g = tg[t];
+      const u = U[li], v = V[li];
+      const qv = ((v + 1) * 31.5) | 0;
+      const endU = endE[qv];
+      if (u > endU || u < -0.08) continue;
+      let a = A[li] * opacity;
+      if (u > endU - 0.025) a *= (endU - u) / 0.025;
+      if (u < 0) a *= 1 + u / 0.08;
+      // raspado: la espátula deja ver lo de debajo en vetas, más hacia el final
+      const skipAmt = skipK * C.smoothstep(0.3, 1, u);
+      if (skS[qv] < skipAmt) a *= 0.12 + 0.88 * C.smoothstep(skipAmt - 0.15, skipAmt, skS[qv]);
+      if (a < 0.004) continue;
+      const o3 = g * 3;
+      if (Math.abs(clip[o3] - br0) + Math.abs(clip[o3 + 1] - bg0) + Math.abs(clip[o3 + 2] - bb0) > near) {
+        const uu = u < 0 ? 0 : u > 1 ? 1 : u;
+        const qb = (uu * 63 + 0.5) | 0, tx = tanX[qb], ty = tanY[qb];
+        const y = (g / W) | 0, x = g - y * W;
+        const offN = (stripes[qv] - 0.5) * ampN, offT = (endE[qv] - 0.95) * 10 * ampT;
+        let lx = (x - ty * offN + tx * offT + 0.5) | 0, ly = (y + tx * offN + ty * offT + 0.5) | 0;
+        lx = lx < 0 ? 0 : lx >= W ? W - 1 : lx; ly = ly < 0 ? 0 : ly >= H ? H - 1 : ly;
+        const l3 = (ly * W + lx) * 3;
+        const d = (Math.abs(clip[l3] - br0) + Math.abs(clip[l3 + 1] - bg0) + Math.abs(clip[l3 + 2] - bb0)) * inv3;
+        if (d > tc0) { a *= d >= tc1 ? 0 : 1 - C.smoothstep(tc0, tc1, d); if (a < 0.004) continue; }
+      }
+      // dos colores arrastrados juntos: vetas marmoladas en la dirección de la espátula
+      const mz = C.smoothstep(0.3, 0.7, 0.5 + 0.5 * Math.sin(u * Lr * f2 + v * f1 + ph + stripes[qv] * 3)) * mixAmt;
+      const rr = cr + (c2r - cr) * mz, gg = cg + (c2g - cg) * mz, bb = cb + (c2b - cb) * mz;
+      const ia = 1 - a;
+      Pr[g] = Pr[g] * ia + rr * a; Pg[g] = Pg[g] * ia + gg * a; Pb[g] = Pb[g] * ia + bb * a;
+      Cv[g] = Cv[g] * ia + a;
+      const a8 = (a * 255) | 0;
+      if (a8 > Sc[g]) Sc[g] = a8;
       if (a > 0.45) { Bc[o3] = br0; Bc[o3 + 1] = bg0; Bc[o3 + 2] = bb0; Pc[o3] = pr8; Pc[o3 + 1] = pg8; Pc[o3 + 2] = pb8; }
-      if (thick > 0) Hh[g] = Hh[g] * (1 - a * 0.85) + a * thick * (0.45 + 0.55 * ts[0] + 0.35 * ts[1] * C.smoothstep(0.5, 0.95, ts[0]));
+      // relieve: meseta lisa, cresta en los lados (pasta empujada) y al final
+      const av = v < 0 ? -v : v;
+      const h = thick * (0.7 + 0.75 * C.smoothstep(0.78, 0.97, av) + 0.9 * C.smoothstep(endU - 0.1, endU - 0.02, u));
+      Hh[g] = Hh[g] * ia + h * a;
     }
     raster.clear();
   }
@@ -2608,8 +2613,13 @@ async function paint(ctx, kind, p, seg, clock) {
     const tolStop = cfg.tolStop * (1 + 0.25 * (nL - 1 - k) / Math.max(1, nL - 1));
     const tolClip = cfg.tolClip * (k === 0 ? 1.25 : 1);
     const T = cfg.refineT * (1 + 0.35 * k / Math.max(1, nL - 1));
-    const minLen = Rk * cfg.minLenK;
+    const tool = cfg.tools ? cfg.tools[Math.min(k, cfg.tools.length - 1)] : "brush";
+    const knife = tool === "knife";
+    const minLen = Rk * (knife ? 1.6 : cfg.minLenK);
     const showGround = cfg.groundShow * (k === 0 ? 1 : 0.5);
+    // ceras: dirección de la mano; cada capa se cruza con la anterior
+    const hang = (cfg.hand || 0) + (k % 2 ? 1 : 0) * (cfg.cross || 0) * 1.2;
+    const hx = Math.cos(hang), hy = Math.sin(hang), handK = cfg.handK || 0;
     for (let oi = 0; oi < cnt; oi++) {
       const ci = order[oi];
       let x = cand.x[ci], y = cand.y[ci];
@@ -2626,7 +2636,13 @@ async function paint(ctx, kind, p, seg, clock) {
           const px = j === 0 ? x : C.clamp(x + (rand() - 0.5) * sp, 0, W - 1), py = j === 0 ? y : C.clamp(y + (rand() - 0.5) * sp, 0, H - 1);
           const g = (py | 0) * W + (px | 0), o3 = g * 3;
           refAt(ref, px, py, col);
-          const e = Cv[g] < 0.3 ? 1 : Math.abs(Bc[o3] / 255 - col[0]) + Math.abs(Bc[o3 + 1] / 255 - col[1]) + Math.abs(Bc[o3 + 2] / 255 - col[2]);
+          // ceras: los huecos del grano no cuentan como "sin pintar" (se mira el entorno)
+          let cvN = Cv[g];
+          if (cfg.media && cvN < 0.3) {
+            const d2 = Math.max(2, Math.round(Rk * 0.35)), yy = py | 0, xx = px | 0;
+            if (xx >= d2 && xx < W - d2 && yy >= d2 && yy < H - d2) cvN = Math.max(cvN, Cv[g - d2], Cv[g + d2], Cv[g - d2 * W], Cv[g + d2 * W]);
+          }
+          const e = cvN < 0.3 ? 1 : Math.abs(Bc[o3] / 255 - col[0]) + Math.abs(Bc[o3 + 1] / 255 - col[1]) + Math.abs(Bc[o3 + 2] / 255 - col[2]);
           ex[j] = px; ey[j] = py; sum += e;
           if (e > best) { best = e; bi = j; }
         }
@@ -2655,6 +2671,11 @@ async function paint(ctx, kind, p, seg, clock) {
         }
         x = mx[bj]; y = my[bj]; base[0] = mr[bj]; base[1] = mg[bj]; base[2] = mb[bj];
       }
+      if (cfg.media) {
+        const lb = 0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2];
+        if (lb > cfg.paperWhite) continue;                                  // el blanco lo pone el papel
+        if (rand() < cfg.sparse * C.smoothstep(0.35, 0.9, lb)) continue;    // en los claros, menos trazos
+      }
       // trazado (si no cabe una pincelada entera, se prueba en otra dirección)
       const ang = (rand() - 0.5) * 2 * cfg.dirJit;
       let Rs = Rk * (0.85 + 0.3 * rand());
@@ -2662,7 +2683,8 @@ async function paint(ctx, kind, p, seg, clock) {
       for (let attempt = 0; attempt < 3; attempt++) {
         const a2 = attempt === 1 ? ang + Math.PI / 2 : attempt === 2 ? ang + Math.PI / 4 : ang;
         if (attempt === 2) Rs *= 0.75;
-        len = trace(ref, x, y, base, { step: Math.max(1, Rs * 1.15), Lmax: Lmax * (0.6 + 0.8 * rand()), curv: cfg.curv, tol: tolStop, ca: Math.cos(a2), sa: Math.sin(a2), fine: Rs < 6 * s });
+        len = trace(ref, x, y, base, { step: Math.max(1, Rs * (knife ? 0.8 : 1.15)), Lmax: (knife ? Rk * cfg.knifeLk : Lmax) * (0.6 + 0.8 * rand()), curv: knife ? 0.03 : cfg.curv, tol: tolStop,
+          ca: Math.cos(a2), sa: Math.sin(a2), fine: Rs < 6 * s, handK, hx, hy });
         if (len >= minLen * (Rs / Rk)) break;
       }
       if (len < minLen * (Rs / Rk) * 0.75) continue; // nada de toques sueltos
@@ -2689,11 +2711,23 @@ async function paint(ctx, kind, p, seg, clock) {
         const tp = (rand() - 0.5) * 2 * cfg.temp * (0.4 + p.varTono + p.varSat * 0.5);
         col[0] = C.clamp(col[0] + tp, 0, 1); col[1] = C.clamp(col[1] + tp * 0.25, 0, 1); col[2] = C.clamp(col[2] - tp, 0, 1);
       }
+      if (pal) {
+        // la cera más parecida de la caja (a veces la segunda: se mezclan por capas)
+        let b1 = 0, b2 = 0, d1 = 1e9, d2 = 1e9;
+        for (let q = 0; q < pal.K; q++) {
+          const dr = col[0] - pal.r[q], dg = col[1] - pal.g[q], db = col[2] - pal.b[q];
+          const d = dr * dr * 0.9 + dg * dg * 1.2 + db * db * 0.7;
+          if (d < d1) { d2 = d1; b2 = b1; d1 = d; b1 = q; } else if (d < d2) { d2 = d; b2 = q; }
+        }
+        const q = rand() < 0.28 && d2 < d1 * 4 + 0.01 ? b2 : b1;
+        col[0] += (pal.r[q] - col[0]) * cfg.palK; col[1] += (pal.g[q] - col[1]) * cfg.palK; col[2] += (pal.b[q] - col[2]) * cfg.palK;
+      }
       const lum = 0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2];
       const im = impAt(x, y);
       const thick = cfg.thick * (0.5 + 0.5 * lum) * (0.7 + 0.3 * im) * (0.55 + 0.9 * rand()) * (k === 0 ? 0.85 : 1);
       const tolC = tolClip * (1 + cfg.lost * C.smoothstep(0.55, 0.15, im));
-      renderStroke(Rs, col, base, cfg.op * (0.9 + 0.1 * rand()), thick, tolC, k);
+      if (knife) renderKnife(Rs, col, base, cfg.op, thick, tolC);
+      else renderStroke(Rs, col, base, cfg.op * (0.9 + 0.1 * rand()), thick, tolC, k);
       if (occ) {
         // marcar las celdas que cubre el cuerpo de la pincelada
         for (let i = 0; i < path.n; i++) {
@@ -2710,8 +2744,27 @@ async function paint(ctx, kind, p, seg, clock) {
       if ((oi & 15) === 0) await clock.tick(0.2 + 0.75 * (k + oi / cnt) / nL);
     }
   }
+  if (cfg.smudge > 0) {
+    // pastel seco: zonas difuminadas con el dedo (sobre todo en lo poco importante)
+    const rb = Math.max(2, Math.round(cfg.R0 * 0.3));
+    const tmpB = new Float32Array(N), bl = new Float32Array(N);
+    const sg = Math.max(4, Math.ceil(W / 32)), sh = Math.max(4, Math.ceil(H / 32));
+    const nzS = C.fbmGrid(sg, sh, Math.max(2, sg / 6), 3, ctx.seed + 91, 0.55);
+    const mk = new Float32Array(N);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = C.smoothstep(0.42, 0.62, C.bilinear(nzS, sg, sh, x / 32, y / 32));
+      mk[y * W + x] = v * cfg.smudge * (1 - 0.6 * impAt(x, y));
+    }
+    for (const plane of [Pr, Pg, Pb, Cv]) {
+      bl.set(plane);
+      C.boxBlurH(bl, tmpB, W, H, rb); C.boxBlurV(tmpB, bl, W, H, rb);
+      C.boxBlurH(bl, tmpB, W, H, rb); C.boxBlurV(tmpB, bl, W, H, rb);
+      for (let i = 0; i < N; i++) { const k2 = mk[i]; if (k2 > 0.01) plane[i] += (bl[i] - plane[i]) * k2; }
+      await clock.tick(0.96);
+    }
+  }
   await clock.tick(0.97);
-  const fcfg = { reliefK: cfg.reliefK, hBlur: 1.6, canvasTex: cfg.canvasTex, shade: cfg.shade, gloss: cfg.gloss, under: 0, R0: cfg.R0, thick: cfg.thick, glossByHeight: true, chalk: cfg.chalk };
+  const fcfg = { reliefK: cfg.reliefK, hBlur: cfg.hBlur || 1.6, canvasTex: cfg.canvasTex, shade: cfg.shade, gloss: cfg.gloss, under: 0, R0: cfg.R0, thick: cfg.thick, glossByHeight: true, chalk: cfg.chalk };
   return { Pr, Pg, Pb, Cv, Hh, cfg: fcfg, grain: null, gsInv: 1, real: true, pap };
 }
 
@@ -2730,14 +2783,14 @@ const BASE = {
   acuarela: { c: [250, 248, 243], amp: 15, kind: "rough", scale: 2.0 },
   gouache:  { c: [244, 241, 234], amp: 10, kind: "paper", scale: 1.6 },
   oleo:     { c: [234, 228, 216], amp: 20, kind: "canvas", scale: 1.0 },
-  rotulador:  { c: [251, 251, 249], amp: 5,  kind: "paper", scale: 1.2 },
   mixtalg:    { c: [246, 243, 236], amp: 9,  kind: "paper", scale: 1.2 },
-  mixta:      { c: [232, 222, 202], amp: 11, kind: "paper", scale: 1.2 },
+  // pastel seco: papel de color (tipo Canson Mi-Teintes)
+  ceras_pastelseco: { c: [214, 204, 186], amp: 12, kind: "rough", scale: 1.1 },
   xilografia: { c: [243, 237, 224], amp: 10, kind: "paper", scale: 1.4 },
 };
 
-async function makePaper(technique, W, H, seed, clock, prep) {
-  const cfg = BASE[technique] || BASE.lapiz;
+async function makePaper(technique, W, H, seed, clock, prep, modo) {
+  const cfg = BASE[technique + "_" + modo] || BASE[technique] || BASE.lapiz;
   if (prep) return realPaper(cfg, technique, W, H, seed, clock, prep);
   const s = Math.max(W, H) / 1000;
   const tile = C.makeGrainTile(seed + (technique === "oleo" ? 9 : technique === "acuarela" ? 21 : 3), cfg.kind);
@@ -3073,311 +3126,6 @@ async function paint(ctx, p, clock, seg, Lfull, opts) {
 }
 
 module.exports = { paint };
-
-};
-__defs["rotuladores.js"] = function (module, exports, require) {
-/*
- * Trazo · Rotuladores
- *
- * El rotulador no pinta manchas: pinta BANDAS de ancho fijo (la punta no cambia).
- * Cada zona se rellena con pasadas paralelas en la dirección de la mano; cada
- * pasada se multiplica sobre la anterior, así que donde se solapan aparecen las
- * vetas oscuras. Las zonas oscuras reciben una 2.ª y 3.ª pasada (a veces
- * cruzada). Mucho blanco del papel. Encima, la línea de fineliner.
- * Variantes: moda (alcohol + línea negra), vetas de alcohol, acuarelables
- * (borde con charco de tinta, agua que funde) y línea con relleno parcial.
- * Exporta las herramientas de banda y de línea para la técnica mixta.
- */
-const C = require("./core.js");
-const S = require("./strokes.js");
-const Lib = require("./library.js");
-const Seg = require("./segment.js");
-const K = require("./kit.js");
-
-const VK = 0.9;
-
-function setPath(path, xs, ys, n) {
-  path.n = n;
-  let sl = 0; path.ss[0] = 0;
-  for (let i = 0; i < n; i++) {
-    path.xs[i] = xs[i]; path.ys[i] = ys[i];
-    if (i) { const dx = xs[i] - xs[i - 1], dy = ys[i] - ys[i - 1]; sl += Math.sqrt(dx * dx + dy * dy); path.ss[i] = sl; }
-  }
-  path.len = sl;
-  return sl;
-}
-
-/**
- * Segmentos de banda que recorren la mancha r con ángulo th y separación sp (px de salida).
- * keep(ax, ay) opcional: el punto de análisis entra en esta pasada.
- * Devuelve [[x0,y0,x1,y1], ...] en px de salida.
- */
-function scanBands(ctx, seg, r, th, sp, minLen, keep, rand) {
-  const { aw, ah, labels } = seg;
-  const fa = 1 / ctx.ax;
-  const tx = Math.cos(th), ty = Math.sin(th), nx = -ty, ny = tx;
-  const a = seg.pixOff[r], b = seg.pixOff[r + 1];
-  let umin = 1e9, umax = -1e9, vmin = 1e9, vmax = -1e9;
-  for (let k = a; k < b; k++) {
-    const pi = seg.pix[k], x = pi % aw + 0.5, y = ((pi / aw) | 0) + 0.5;
-    const u = x * tx + y * ty, v = x * nx + y * ny;
-    if (u < umin) umin = u; if (u > umax) umax = u; if (v < vmin) vmin = v; if (v > vmax) vmax = v;
-  }
-  const spa = Math.max(0.6, sp / fa), du = 0.7;
-  const out = [];
-  for (let v = vmin + spa * (0.3 + 0.4 * rand()); v <= vmax; v += spa) {
-    let start = null, last = null;
-    for (let u = umin - 1; u <= umax + 1; u += du) {
-      const x = u * tx + v * nx, y = u * ty + v * ny;
-      const ax = x | 0, ay = y | 0;
-      const inside = ax >= 0 && ay >= 0 && ax < aw && ay < ah && labels[ay * aw + ax] === r && (!keep || keep(ax, ay));
-      if (inside) { if (start === null) start = u; last = u; }
-      else if (start !== null) {
-        if ((last - start) * fa >= minLen) out.push(seg2(start, last, v, tx, ty, nx, ny, fa));
-        start = null;
-      }
-    }
-    if (start !== null && (last - start) * fa >= minLen) out.push(seg2(start, last, v, tx, ty, nx, ny, fa));
-  }
-  return out;
-}
-function seg2(u0, u1, v, tx, ty, nx, ny, fa) {
-  return [(u0 * tx + v * nx) * fa, (u0 * ty + v * ny) * fa, (u1 * tx + v * nx) * fa, (u1 * ty + v * ny) * fa];
-}
-
-/**
- * Pinta una banda recta (con un leve temblor) usando una muestra real.
- * apply(g, a, u, v) recibe píxel, densidad, posición a lo largo (0..1) y a lo ancho (−1..1).
- */
-function drawBand(ctx, raster, path, lib, rand, x0, y0, x1, y1, width, wobble, apply) {
-  const dx = x1 - x0, dy = y1 - y0, L = Math.sqrt(dx * dx + dy * dy);
-  if (L < 1) return;
-  const n = Math.max(2, Math.min(S.MAXPTS - 2, Math.ceil(L / Math.max(2, width * 0.8)) + 1));
-  const ux = dx / L, uy = dy / L, px = -uy, py = ux;
-  const ph = rand() * 6.28, fq = (1 + rand() * 2) * Math.PI / L;
-  const xs = [], ys = [];
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const w = Math.sin(t * L * fq + ph) * wobble;
-    xs.push(x0 + dx * t + px * w); ys.push(y0 + dy * t + py * w);
-  }
-  setPath(path, xs, ys, n);
-  const Rr = width / 2 / 0.7;
-  for (let i = 0; i < path.n; i++) path.rs[i] = Rr * VK;
-  const nt = raster.rasterize(path, 0.03);
-  if (!nt) return;
-  const st = Lib.prepare(Lib.pick(lib, rand), path.len, Rr, rand, VK);
-  const ts = new Float32Array(2);
-  const A = raster.A, U = raster.U, V = raster.V, tl = raster.tl, tg = raster.tg;
-  for (let t = 0; t < nt; t++) {
-    const li = tl[t];
-    Lib.sampleAt(st, U[li], V[li], ts);
-    const a = ts[0] * A[li];
-    if (a > 0.004) apply(tg[t], a, U[li], V[li]);
-  }
-  raster.clear();
-}
-
-/**
- * Líneas de contorno (fineliner / pluma): cadenas de borde entre manchas con contraste,
- * cortadas en tramos con las puntas pasadas, como a mano.
- */
-async function drawContours(ctx, seg, Lfull, opts, clock) {
-  const { W, H } = ctx;
-  const reg = seg.reg;
-  const rand = C.mulberry32(ctx.seed * 23 + (opts.seed || 0));
-  const fa = 1 / ctx.ax;
-  const lib = opts.lib && opts.lib.length ? opts.lib : Lib.synthetic("lapiz");
-  const raster = new S.StrokeRaster(W, H);
-  const path = new S.StrokePath();
-  const chains = Seg.boundaryChains(seg, 4);
-  const lab = reg.lab;
-  const xs = [], ys = [];
-  for (let ci = 0; ci < chains.length; ci++) {
-    const ch = chains[ci];
-    const r = ch.r, q = ch.q;
-    const d0 = lab[r * 3] - lab[q * 3], d1 = lab[r * 3 + 1] - lab[q * 3 + 1], d2 = lab[r * 3 + 2] - lab[q * 3 + 2];
-    const contrast = Math.min(1, Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2) / 40);
-    // solo bordes con contraste y con recorrido: pocas líneas, decididas
-    const want = C.clamp((contrast - opts.thr) * 2.2 + (reg.imp[r] - 0.5) * opts.impK, 0, 1) * C.smoothstep(10, 40, ch.n) * (opts.density === undefined ? 1 : opts.density);
-    if (rand() > want) continue;
-    // suavizado fuerte de la cadena (sin escalones ni ondas de la segmentación)
-    { const m = ch.n, w = 5, sx = new Float32Array(m), sy = new Float32Array(m);
-      for (let k = 0; k < m; k++) { let ax2 = 0, ay2 = 0, c = 0; for (let q2 = -w; q2 <= w; q2++) { const j2 = Math.min(m - 1, Math.max(0, k + q2)); ax2 += ch.xs[j2]; ay2 += ch.ys[j2]; c++; } sx[k] = ax2 / c; sy[k] = ay2 / c; }
-      ch.xs = sx; ch.ys = sy; }
-    // tramos de longitud variable, con las puntas pasadas y huecos
-    let i = 0;
-    while (i < ch.n - 2) {
-      const segLen = (opts.segLen || 60) * (0.6 + 0.9 * rand());
-      xs.length = 0; ys.length = 0;
-      let acc = 0, j = i;
-      for (; j < ch.n && acc < segLen; j++) {
-        xs.push(ch.xs[j] * fa); ys.push(ch.ys[j] * fa);
-        const m = xs.length;
-        if (m > 1) acc += Math.hypot(xs[m - 1] - xs[m - 2], ys[m - 1] - ys[m - 2]);
-      }
-      i = j + ((rand() * (opts.gap || 2)) | 0);
-      if (xs.length < 2 || acc < 3) continue;
-      // remuestreo y prolongación de las puntas
-      const step = Math.max(1.5, opts.width * 1.5);
-      const rx = [xs[0]], ry = [ys[0]];
-      for (let k = 1; k < xs.length; k++) {
-        const ddx = xs[k] - rx[rx.length - 1], ddy = ys[k] - ry[ry.length - 1];
-        if (ddx * ddx + ddy * ddy >= step * step || k === xs.length - 1) { rx.push(xs[k]); ry.push(ys[k]); }
-      }
-      if (rx.length < 2) continue;
-      // la punta se pasa un poco (nunca atraviesa la forma)
-      const over = Math.min((opts.overshoot || 0) * acc, opts.width * 6);
-      if (over > 0) {
-        const m = rx.length;
-        let ex = rx[m - 1] - rx[m - 2], ey = ry[m - 1] - ry[m - 2], el = Math.hypot(ex, ey) || 1;
-        rx.push(rx[m - 1] + ex / el * over * rand()); ry.push(ry[m - 1] + ey / el * over * rand());
-        let bx = rx[0] - rx[1], by = ry[0] - ry[1], bl2 = Math.hypot(bx, by) || 1;
-        rx.unshift(rx[0] + bx / bl2 * over * rand()); ry.unshift(ry[0] + by / bl2 * over * rand());
-      }
-      const n = Math.min(rx.length, S.MAXPTS - 2);
-      setPath(path, rx, ry, n);
-      const wv = opts.width * (0.75 + 0.5 * rand()) * (0.7 + 0.6 * contrast);
-      const Rr = wv / 2 / 0.7;
-      for (let k = 0; k < n; k++) path.rs[k] = Rr * VK;
-      const nt = raster.rasterize(path, 0.03);
-      if (!nt) continue;
-      const st = Lib.prepare(Lib.pick(lib, rand), path.len, Rr, rand, VK);
-      const ts = new Float32Array(2);
-      const A = raster.A, U = raster.U, V = raster.V, tl = raster.tl, tg = raster.tg;
-      const mx = rx[(n / 2) | 0], my = ry[(n / 2) | 0];
-      for (let t = 0; t < nt; t++) {
-        const li = tl[t];
-        Lib.sampleAt(st, U[li], V[li], ts);
-        const a = ts[0] * A[li] * opts.opacity;
-        if (a > 0.004) opts.apply(tg[t], a, r, q, mx, my);
-      }
-      raster.clear();
-    }
-    if (clock && (ci & 31) === 0) await clock.tick(ci / chains.length);
-  }
-}
-
-/** Color de rotulador: más puro y luminoso que la foto (tintas de alcohol). */
-function markerColor(r, g, b, satK, out) {
-  const y = 0.299 * r + 0.587 * g + 0.114 * b;
-  out[0] = C.clamp(y + (r - y) * satK, 0, 1); out[1] = C.clamp(y + (g - y) * satK, 0, 1); out[2] = C.clamp(y + (b - y) * satK, 0, 1);
-  return out;
-}
-
-async function paint(ctx, p, seg, Lfull, clock) {
-  const { W, H, N, s } = ctx;
-  const reg = seg.reg;
-  const mode = p.modo;
-  const rand = C.mulberry32(ctx.seed * 29 + 3);
-  const mk = (ctx.strokesOf(["pin_rotulador"]) || { samples: Lib.synthetic("rotulador") }).samples;
-  const ln = (ctx.strokesOf(["pin_linea"]) || { samples: Lib.synthetic("lapiz") }).samples;
-  const pc = (ctx.strokesOf(["pin_lapiz"]) || { samples: Lib.synthetic("lapiz") }).samples;
-  const Tr = new Float32Array(N).fill(1), Tg = new Float32Array(N).fill(1), Tb = new Float32Array(N).fill(1);
-  const raster = new S.StrokeRaster(W, H);
-  const path = new S.StrokePath();
-  const col = new Float32Array(3), lay = new Float32Array(3);
-
-  const Wn = Math.max(2, (3 + 13 * p.grosor) * s * (mode === "acuarelable" ? 1.15 : mode === "linea" ? 0.8 : 1));
-  const spacing = mode === "vetas" ? 0.92 : mode === "acuarelable" ? 0.78 : 0.85;
-  const handAng = mode === "vetas" ? -Math.PI / 2 + 0.12 : -Math.PI / 3;
-  const op = 0.55 + 0.4 * p.intensidad;
-  const sat = 1.25 + 0.5 * p.varSat;
-
-  // qué zonas se rellenan
-  const fillP = { moda: 0.15 + 0.7 * p.cobertura, vetas: 0.3 + 0.7 * p.cobertura, acuarelable: 0.2 + 0.7 * p.cobertura, linea: 0.05 + 0.55 * p.cobertura }[mode];
-  const order = Array.from({ length: reg.n }, (_, i) => i).sort((a, b) => reg.lum[b] - reg.lum[a]); // de claro a oscuro
-  const ax = ctx.ax;
-  for (let oi = 0; oi < order.length; oi++) {
-    const r = order[oi];
-    const lum = reg.lum[r], dark = 1 - lum;
-    if (lum > 0.86 - 0.08 * p.cobertura) continue;                       // blanco del papel
-    const want = fillP * (0.8 + 0.6 * reg.imp[r]) * (0.75 + 0.6 * dark);
-    if (rand() > want) continue;
-    markerColor(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2], sat, col);
-    C.varyColor(col[0], col[1], col[2], (rand() - 0.5) * p.varTono * 0.5, 0, 0, col);
-    if (mode === "moda" && lum < 0.2) { col[0] = col[1] = col[2] = 0.06; }  // negros de rotulador
-    // dirección: la de la forma si es clara; si no, la de la mano
-    let th = reg.coh[r] > 0.5 ? 0.5 * Math.atan2(reg.os[r], reg.oc[r]) : handAng;
-    th += (rand() - 0.5) * 0.15;
-    const layers = 1 + (dark > 0.42 ? 1 : 0) + (dark > 0.68 ? 1 : 0);
-    // primera pasada: color claro; las siguientes oscurecen (misma tinta)
-    const k1 = 0.5 + 0.12 * (1 - p.intensidad);
-    for (let L = 0; L < layers; L++) {
-      const thL = th + (L > 0 ? (L % 2 ? 1 : -1) * p.cruzado * 0.9 : 0);
-      const thr = L === 0 ? 2 : [0, 0.5, 0.32][L];
-      const keep = L === 0 ? null : (gx, gy) => ctx.lum[gy * seg.aw + gx] < thr + 0.1 * (rand() - 0.5);
-      const bands = scanBands(ctx, seg, r, thL, Wn * spacing, Wn * 1.2, keep, rand);
-      for (let c = 0; c < 3; c++) lay[c] = 1 - (1 - col[c]) * (L === 0 ? 1 - k1 : 0.7);
-      for (const bd of bands) {
-        // las pasadas se pasan un poco del borde o se quedan cortas, como a mano
-        const ex = bd[2] - bd[0], ey = bd[3] - bd[1], el = Math.hypot(ex, ey) || 1;
-        const o0 = (rand() - 0.6) * Wn * 0.6, o1 = (rand() - 0.6) * Wn * 0.6;
-        const x0 = bd[0] - ex / el * o0, y0 = bd[1] - ey / el * o0, x1 = bd[2] + ex / el * o1, y1 = bd[3] + ey / el * o1;
-        const lr = lay[0], lg = lay[1], lb = lay[2];
-        drawBand(ctx, raster, path, mk, rand, x0, y0, x1, y1, Wn, Wn * 0.08, (g, a, u, v) => {
-          let aa = a * op;
-          if (u < 0.03 || u > 0.97) aa = Math.min(1, aa * 1.25);                // charco al apoyar y levantar
-          if (mode === "acuarelable") { const av = v < 0 ? -v : v; aa *= 0.75 + 0.55 * C.smoothstep(0.55, 1, av); }
-          Tr[g] *= 1 - aa * (1 - lr); Tg[g] *= 1 - aa * (1 - lg); Tb[g] *= 1 - aa * (1 - lb);
-        });
-      }
-    }
-    if ((oi & 7) === 0) await clock.tick(0.65 * oi / order.length);
-  }
-
-  // acuarelables: el agua funde parte de cada zona (desenfoque dentro de la mancha)
-  if (mode === "acuarelable") {
-    const tmp = new Float32Array(N);
-    const rb = Math.max(1, Math.round(Wn * 0.5));
-    const wet = new Float32Array(reg.n);
-    for (let r = 0; r < reg.n; r++) wet[r] = rand() < 0.55 ? 0.35 + 0.5 * rand() : 0;
-    for (const T of [Tr, Tg, Tb]) {
-      const b = Float32Array.from(T);
-      C.boxBlurH(b, tmp, W, H, rb); C.boxBlurV(tmp, b, W, H, rb);
-      C.boxBlurH(b, tmp, W, H, rb); C.boxBlurV(tmp, b, W, H, rb);
-      for (let i = 0; i < N; i++) { const w = wet[Lfull[i]]; if (w > 0) T[i] += (b[i] - T[i]) * w; }
-    }
-  }
-  await clock.tick(0.7);
-
-  // lápiz de color en las sombras (línea y relleno)
-  if (mode === "linea") {
-    for (let r = 0; r < reg.n; r++) {
-      const dark = 1 - reg.lum[r];
-      if (dark < 0.45 || reg.imp[r] < 0.45 || rand() > 0.6) continue;
-      markerColor(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2], 1.4, col);
-      const bands = scanBands(ctx, seg, r, -Math.PI / 4 + (rand() - 0.5) * 0.3, Wn * 0.55, Wn * 1.5, (gx, gy) => ctx.lum[gy * seg.aw + gx] < 0.55, rand);
-      for (const bd of bands) {
-        drawBand(ctx, raster, path, pc, rand, bd[0], bd[1], bd[2], bd[3], Math.max(1.2, Wn * 0.28), Wn * 0.05, (g, a) => {
-          const aa = a * 0.6 * (0.5 + 0.5 * dark);
-          Tr[g] *= 1 - aa * (1 - col[0] * 0.8); Tg[g] *= 1 - aa * (1 - col[1] * 0.8); Tb[g] *= 1 - aa * (1 - col[2] * 0.8);
-        });
-      }
-    }
-  }
-
-  // línea: negra de fineliner (moda), de color (línea y relleno) o suave (vetas, acuarelables)
-  const lineCol = new Float32Array(3);
-  const lw = Math.max(0.9, (0.7 + 2.2 * p.grosor) * s * (mode === "moda" ? 1 : 0.8));
-  await drawContours(ctx, seg, Lfull, {
-    lib: ln, width: lw, opacity: mode === "acuarelable" ? 0.5 : mode === "moda" ? 0.85 : 0.7,
-    density: { moda: 0.55, vetas: 0.3, acuarelable: 0.3, linea: 0.7 }[mode],
-    thr: (mode === "moda" ? 0.3 : mode === "linea" ? 0.22 : 0.5) - 0.15 * p.detalle, impK: 0.8,
-    segLen: (40 + 140 * p.longitud) * s, gap: 4, overshoot: mode === "moda" ? 0.12 : 0.06,
-    apply: (g, a, r) => {
-      if (mode === "moda") { lineCol[0] = 0.05; lineCol[1] = 0.05; lineCol[2] = 0.06; }
-      else { markerColor(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2], 1.5, lineCol); lineCol[0] *= 0.45; lineCol[1] *= 0.45; lineCol[2] *= 0.45; }
-      Tr[g] *= 1 - a * (1 - lineCol[0]); Tg[g] *= 1 - a * (1 - lineCol[1]); Tb[g] *= 1 - a * (1 - lineCol[2]);
-    },
-  }, { tick: async (f) => clock.tick(0.72 + 0.25 * f) });
-
-  const out = K.transToRGBA(Tr, Tg, Tb);
-  if (ctx.selFull) for (let i = 0; i < N; i++) out[i * 4 + 3] = out[i * 4 + 3] * ctx.selFull[i] / 255;
-  return out;
-}
-
-module.exports = { paint, scanBands, drawBand, drawContours, markerColor, setPath };
 
 };
 __defs["segment.js"] = function (module, exports, require) {
@@ -4205,10 +3953,10 @@ const TECHNIQUES = [
     id: "oleo", name: "Óleo", desc: "Pinceladas cargadas sobre imprimatura, empaste en las luces",
     params: PAINT,
     variants: [
-      { id: "planos", name: "Planos y espátula", values: { intensidad: 88, grosor: 50, longitud: 38, curvatura: 45, cobertura: 100, empaste: 70, varTono: 22, varSat: 25, varLuz: 22, detalle: 55 } },
+      { id: "planos", name: "Planos y espátula", values: { intensidad: 90, grosor: 52, longitud: 40, curvatura: 35, cobertura: 100, empaste: 65, varTono: 28, varSat: 30, varLuz: 26, detalle: 50 } },
       { id: "gestual", name: "Gestual", values: { intensidad: 80, grosor: 68, longitud: 70, curvatura: 65, cobertura: 92, empaste: 45, varTono: 35, varSat: 40, varLuz: 30, detalle: 40 } },
       { id: "boceto", name: "Boceto sobre imprimatura", values: { intensidad: 70, grosor: 42, longitud: 55, curvatura: 55, cobertura: 75, empaste: 30, varTono: 18, varSat: 18, varLuz: 18, detalle: 50 } },
-      { id: "materico", name: "Matérico", values: { intensidad: 90, grosor: 55, longitud: 35, curvatura: 40, cobertura: 100, empaste: 85, varTono: 15, varSat: 12, varLuz: 25, detalle: 50 } },
+      { id: "materico", name: "Matérico", values: { intensidad: 92, grosor: 60, longitud: 45, curvatura: 50, cobertura: 100, empaste: 90, varTono: 28, varSat: 28, varLuz: 28, detalle: 45 } },
     ],
   },
   {
@@ -4239,16 +3987,17 @@ const TECHNIQUES = [
       { id: "capas", name: "Paisaje por capas", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 85, humedad: 50, granulado: 45, varTono: 22, varSat: 20, varLuz: 20, detalle: 50 } },
       { id: "dibujo", name: "Con dibujo", values: { intensidad: 65, grosor: 45, longitud: 40, curvatura: 50, cobertura: 75, humedad: 45, granulado: 40, varTono: 18, varSat: 15, varLuz: 15, detalle: 60 } },
       { id: "densa", name: "Densa", values: { intensidad: 92, grosor: 45, longitud: 45, curvatura: 50, cobertura: 92, humedad: 55, granulado: 60, varTono: 25, varSat: 30, varLuz: 22, detalle: 60 } },
+      { id: "gotas", name: "Gotas de agua", values: { intensidad: 82, grosor: 50, longitud: 40, curvatura: 50, cobertura: 85, humedad: 75, granulado: 45, varTono: 22, varSat: 22, varLuz: 20, detalle: 50 } },
     ],
   },
   {
-    id: "rotulador", name: "Rotulador", desc: "Bandas de ancho fijo que oscurecen al solaparse",
-    params: ["intensidad", "grosor", "longitud", "cobertura", "cruzado", "varTono", "varSat", "detalle"],
+    id: "ceras", name: "Ceras", desc: "Óleo en barra, pastel y ceras de colores sobre el grano del papel",
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle"],
     variants: [
-      { id: "moda", name: "Moda (alcohol + línea)", values: { intensidad: 80, grosor: 45, longitud: 70, cobertura: 60, cruzado: 35, varTono: 10, varSat: 20, detalle: 65 } },
-      { id: "vetas", name: "Vetas de alcohol", values: { intensidad: 75, grosor: 40, longitud: 60, cobertura: 90, cruzado: 55, varTono: 10, varSat: 15, detalle: 50 } },
-      { id: "acuarelable", name: "Acuarelables", values: { intensidad: 80, grosor: 50, longitud: 40, cobertura: 70, cruzado: 25, varTono: 15, varSat: 25, detalle: 45 } },
-      { id: "linea", name: "Línea y relleno", values: { intensidad: 70, grosor: 30, longitud: 55, cobertura: 50, cruzado: 40, varTono: 15, varSat: 15, detalle: 70 } },
+      { id: "barra", name: "Óleo en barra", values: { intensidad: 88, grosor: 58, longitud: 45, curvatura: 50, cobertura: 95, empaste: 70, cruzado: 25, varTono: 25, varSat: 25, varLuz: 22, detalle: 45 } },
+      { id: "pastelgraso", name: "Pastel graso", values: { intensidad: 80, grosor: 48, longitud: 40, curvatura: 55, cobertura: 92, empaste: 35, cruzado: 40, varTono: 28, varSat: 28, varLuz: 22, detalle: 55 } },
+      { id: "pastelseco", name: "Pastel seco", values: { intensidad: 70, grosor: 55, longitud: 45, curvatura: 45, cobertura: 90, empaste: 5, cruzado: 35, varTono: 22, varSat: 20, varLuz: 25, detalle: 50 } },
+      { id: "manley", name: "Ceras Manley", values: { intensidad: 78, grosor: 35, longitud: 55, curvatura: 40, cobertura: 88, empaste: 12, cruzado: 55, varTono: 18, varSat: 22, varLuz: 15, detalle: 55 } },
     ],
   },
   {
@@ -4259,16 +4008,6 @@ const TECHNIQUES = [
       { id: "equilibrada", name: "Equilibrada", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 62, empaste: 12, cruzado: 35, varTono: 15, varSat: 15, varLuz: 15, detalle: 60 } },
       { id: "masgouache", name: "Más gouache", values: { intensidad: 70, grosor: 50, longitud: 38, curvatura: 50, cobertura: 85, empaste: 15, cruzado: 25, varTono: 15, varSat: 15, varLuz: 15, detalle: 55 } },
       { id: "manchas", name: "Manchas sueltas", values: { intensidad: 75, grosor: 55, longitud: 35, curvatura: 50, cobertura: 55, empaste: 10, cruzado: 30, varTono: 22, varSat: 22, varLuz: 18, detalle: 60 } },
-    ],
-  },
-  {
-    id: "mixta", name: "Mixta total", desc: "Collage, gouache, tinta, ceras e impresión en la misma lámina",
-    params: ["intensidad", "grosor", "longitud", "cobertura", "granulado", "varTono", "varSat", "detalle"],
-    variants: [
-      { id: "cuaderno", name: "Cuaderno", values: { intensidad: 70, grosor: 40, longitud: 50, cobertura: 55, granulado: 40, varTono: 15, varSat: 20, detalle: 65 } },
-      { id: "collage", name: "Collage", values: { intensidad: 75, grosor: 45, longitud: 45, cobertura: 85, granulado: 55, varTono: 15, varSat: 15, detalle: 55 } },
-      { id: "cartel", name: "Cartel", values: { intensidad: 85, grosor: 55, longitud: 40, cobertura: 95, granulado: 45, varTono: 20, varSat: 35, detalle: 50 } },
-      { id: "impresion", name: "Impresión", values: { intensidad: 80, grosor: 45, longitud: 45, cobertura: 85, granulado: 75, varTono: 10, varSat: 20, detalle: 55 } },
     ],
   },
   {
@@ -4671,8 +4410,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const tWhite = 0.035 + (1 - p.cobertura) * 0.22; // luces reservadas
   // variantes: número de aguadas, humedad efectiva e intensidad
   const mode = p.modo || "capas";
-  const K = mode === "densa" ? 5 : mode === "humeda" || mode === "dibujo" ? 3 : 4;
-  const humX = mode === "humeda" ? 0.25 : mode === "densa" ? -0.05 : 0;
+  const K = mode === "densa" ? 5 : mode === "humeda" || mode === "dibujo" || mode === "gotas" ? 3 : 4;
+  const humX = mode === "humeda" ? 0.25 : mode === "gotas" ? 0.15 : mode === "densa" ? -0.05 : 0;
   const FR = K === 5 ? [0, 0.2, 0.4, 0.6, 0.78] : K === 3 ? [0, 0.35, 0.65] : [0, 0.26, 0.5, 0.72];
   const th = [];
   for (let k = 0; k < K; k++) th.push(tWhite + (Math.max(tWhite + 0.1, dmax) - tWhite) * FR[k]);
@@ -4850,6 +4589,80 @@ async function paint(ctx, p, seg, Lfull, clock) {
   }
   const tileK = 0.12 + 0.18 * p.granulado + (mode === "humeda" ? 0.08 : 0);
 
+  const edgeTile = C.makeGrainTile(ctx.seed + 808, "paper");
+  const etInv = 1 / Math.max(1, Math.sqrt(s) * 1.4);
+  /* ---------- gotas de agua sobre la aguada húmeda ---------- */
+  // Cada gota empuja el pigmento hacia fuera: centro lavado, anillo oscuro de coliflor,
+  // gotitas satélite y, en las grandes, un corrimiento hacia abajo.
+  let dropMul = null;
+  if (mode === "gotas") {
+    dropMul = new Float32Array(N).fill(1);
+    const rnd = C.mulberry32(ctx.seed * 97 + 5);
+    const ang = new Float32Array(64);
+    const nDrops = Math.round((10 + 26 * p.humedad) * Math.sqrt(W * H) / 1400);
+    const rMin = 5 * s, rMax = (24 + 40 * p.grosor) * s;
+    const drop = (cx, cy, r, strength) => {
+      // borde irregular: radio que cambia con el ángulo (lóbulos de coliflor)
+      let a0 = rnd(), a1 = rnd(), a2 = rnd();
+      for (let q = 0; q < 64; q++) { a0 = a0 * 0.8 + rnd() * 0.2; a1 = a1 * 0.5 + rnd() * 0.5; a2 = a2 * 0.2 + rnd() * 0.8; ang[q] = 1 + (a0 - 0.5) * 0.55 + (a1 - 0.5) * 0.22 + (a2 - 0.5) * 0.08; }
+      for (let q = 56; q < 64; q++) ang[q] += (ang[0] - ang[q]) * (q - 55) / 9; // cerrar el contorno
+      const R = r * 1.45;
+      const x0 = Math.max(0, (cx - R) | 0), x1 = Math.min(W - 1, (cx + R) | 0), y0 = Math.max(0, (cy - R) | 0), y1 = Math.min(H - 1, (cy + R) | 0);
+      const rimW = 0.22 + 0.12 * rnd(), sc = 1 / Math.max(2, r * 0.18);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const dx = x - cx, dy = y - cy;
+        const th = Math.atan2(dy, dx), qf = (th / 6.2832 + 0.5) * 63.999, q0 = qf | 0;
+        const rr = r * (ang[q0] + (ang[(q0 + 1) & 63] - ang[q0]) * (qf - q0));
+        // filo de coliflor: ruido a la escala de la gota y grano del papel
+        const nb = C.bilinear(bloomF, bgw, bgh, (x * sc) % (bgw - 1), (y * sc) % (bgh - 1)) - 0.5;
+        const g = C.tileAt(edgeTile, x * etInv * 0.7, y * etInv * 0.7) - 0.5;
+        const d = Math.sqrt(dx * dx + dy * dy) / rr + nb * 0.35 + g * 0.05;
+        if (d > 1.12) continue;
+        let m;
+        if (d < 1 - rimW) m = 1 - strength * (0.5 - 0.2 * Math.pow(Math.max(0, d) / (1 - rimW), 2));     // centro lavado
+        else if (d < 1) m = 1 - strength * 0.3 + strength * 1.05 * C.smoothstep(1 - rimW, 1, d);       // el pigmento se acumula hacia el filo
+        else m = 1 + strength * 0.75 * (1 - C.smoothstep(1, 1.12, d));                                   // fleco que se abre
+        dropMul[y * W + x] *= m;
+      }
+    };
+    for (let k = 0; k < nDrops; k++) {
+      // las gotas caen donde hay color
+      let cx = 0, cy = 0;
+      for (let t = 0; t < 6; t++) {
+        cx = rnd() * W; cy = rnd() * H;
+        const r = wl[Math.min(wh - 1, (cy / qy) | 0) * ww + Math.min(ww - 1, (cx / qx) | 0)];
+        if (nCover[r] > 0) break;
+      }
+      const r = rMin + (rMax - rMin) * Math.pow(rnd(), 2.2);
+      const st = 0.75 + 0.25 * rnd();
+      drop(cx, cy, r, st);
+      // gotitas satélite al salpicar
+      const ns = (rnd() * 3) | 0;
+      for (let j = 0; j < ns; j++) {
+        const a = rnd() * 6.28, dd = r * (1.4 + 1.2 * rnd());
+        drop(cx + Math.cos(a) * dd, cy + Math.sin(a) * dd, Math.max(rMin, r * (0.15 + 0.2 * rnd())), st * 0.7);
+      }
+      // corrimiento: el agua de las gotas grandes baja arrastrando pigmento
+      if (r > rMin + (rMax - rMin) * 0.35 && rnd() < 0.35) {
+        const L = r * (2 + 4 * rnd()), w0 = r * (0.18 + 0.12 * rnd());
+        let x = cx + (rnd() - 0.5) * r * 0.5;
+        for (let t = 0; t < L; t += 1) {
+          x += (rnd() - 0.5) * 0.6;
+          const y = (cy + r * 0.8 + t) | 0;
+          if (y >= H) break;
+          const w = w0 * (1 - 0.6 * t / L);
+          for (let xx = Math.max(0, (x - w - 1) | 0); xx <= Math.min(W - 1, (x + w + 1) | 0); xx++) {
+            const e = Math.abs(xx - x) / w;
+            if (e > 1) continue;
+            dropMul[y * W + xx] *= 0.7 + 0.55 * C.smoothstep(0.45, 1, e);
+          }
+        }
+        drop(x, cy + r * 0.8 + L, w0 * 1.3, 0.9); // gota al final del corrimiento
+      }
+      if ((k & 7) === 0) await clock.tick(0.7);
+    }
+  }
+
   /* ---------- composición a resolución completa ---------- */
   const out = new Uint8Array(N * 4);
   const selFull = ctx.selFull, data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
@@ -4859,8 +4672,6 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const dnK = 0.55 + 0.4 * p.intensidad;
   const cover = ctx.cover, fullCover = p.cobertura >= 0.995;
   const L0 = layers.length;
-  const edgeTile = C.makeGrainTile(ctx.seed + 808, "paper");
-  const etInv = 1 / Math.max(1, Math.sqrt(s) * 1.4);
   const edgeG = 0.3 + 0.25 * p.granulado, edgeF = 0.22, dryK = 0.35 + 0.5 * p.granulado;
   for (let y = 0; y < H; y++) {
     let wy = (y + 0.5) / qy - 0.5; if (wy < 0) wy = 0; if (wy > wh - 1) wy = wh - 1;
@@ -4895,7 +4706,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
         const dens = (1 + rimK * rm) * (1 + turbK * (tu - 0.5) * 2 * (0.6 + Lk.wet)) *
                      (1 + granK * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
                      (ltiles[k] ? 1 + tileK * Math.max(-2, Math.min(2, ltiles[k].l(x, y))) : 1);
-        const f = cv * (dens < 0.1 ? 0.1 : dens);
+        const dm = dropMul && Lk.wet > 0.5 ? dropMul[i] : 1;
+        const f = cv * (dens < 0.1 ? 0.1 : dens) * dm;
         AR += f * (Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11);
         AG += f * (Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11);
         AB += f * (Lk.aB[i00] * w00 + Lk.aB[i10] * w10 + Lk.aB[i01] * w01 + Lk.aB[i11] * w11);
@@ -5124,14 +4936,15 @@ async function paint(ctx, p, seg, Lfull, clock) {
   }
 
   // contornos: la madera que se deja alrededor de las formas en las zonas claras
-  if (p.detalle > 0.05) {
+  // (solo en la expresiva: en las demás la forma la definen los cortes, sin perfil gris)
+  if (expr && p.detalle > 0.05) {
     const thr = 0.5 - 0.3 * p.detalle;
     const cw = Math.max(0.7, (0.6 + 1.6 * p.grosor) * s * (expr ? 1.6 : 1));
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const e = ctx.at(ctx.edgeRaw, x, y);
       if (e < thr) continue;
       const i = y * W + x;
-      const k = C.smoothstep(thr, thr + 0.25, e) * C.clamp(cw * 0.6, 0.4, 1);
+      const k = C.smoothstep(thr, thr + 0.12, e);
       ink[i] = Math.max(ink[i], k);
     }
   }
@@ -5165,11 +4978,16 @@ async function paint(ctx, p, seg, Lfull, clock) {
       for (let y = 0; y < H; y++) {
         const sy = C.clamp(y - oy, 0, H - 1);
         for (let x = 0; x < W; x++) {
-          const sx = C.clamp(x - ox, 0, W - 1);
-          const r = Lfull[sy * W + sx];
+          // filo mellado de la plancha de color (la gubia no sigue la forma al píxel)
+          const jx = (C.bilinear(wob, gw, gh, x / 24 + 20 * k, y / 24) - 0.5) * 3 * s + (C.hash2(x >> 1, y >> 1, 41 + k) - 0.5) * 1.5;
+          const jy = (C.bilinear(wob, gw, gh, x / 24, y / 24 + 20 * k) - 0.5) * 3 * s;
+          const sx = C.clamp((x - ox + jx) | 0, 0, W - 1), sy2 = C.clamp((sy + jy) | 0, 0, H - 1);
+          const r = Lfull[sy2 * W + sx];
           if (regInk[r] !== k) continue;
           const i = y * W + x;
-          let a = 0.95 * inkStr * (0.92 + 0.16 * (C.bilinear(press, gw, gh, x / 24 + k * 13, y / 24) - 0.5));
+          // presión desigual (zonas más pálidas) y veta de la madera en la tinta de color
+          let a = 0.95 * inkStr * (0.86 + 0.28 * (C.bilinear(press, gw, gh, x / 24 + k * 13, y / 24) - 0.5));
+          if (mad) a *= 1 - 0.35 * C.smoothstep(0.55, 0.9, mad(x * 0.9 + 77 * k, y * 0.9));
           if (mad) { const gv = mad(x, y); a *= 1 - madM * 0.8 * C.smoothstep(0.7, 0.95, gv); }
           if (imp) a *= 1 - gran * 0.4 * C.smoothstep(0.25, 0.05, imp(x * 1.3, y * 1.3));
           a *= 1 - gran * 0.25 * C.smoothstep(0.8, 1, C.hash2(x, y, 31 + k));
@@ -5186,7 +5004,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
       let a = ink[i];
       const it = inter[i];
       // presión desigual: negros algo grisáceos en zonas
-      let pr = Math.min(1, inkStr * (0.97 + 0.1 * (C.bilinear(press, gw, gh, x / 24, y / 24) - 0.5)));
+      let pr = Math.min(1, inkStr * (0.95 + 0.18 * (C.bilinear(press, gw, gh, x / 24, y / 24) - 0.5)));
       if (a > 0.01) {
         // moteado: poros sin tinta, más en el centro de las masas grandes
         const deep = C.smoothstep(0.75, 0.98, it);
@@ -5194,14 +5012,14 @@ async function paint(ctx, p, seg, Lfull, clock) {
         if (imp) speck = Math.max(speck, C.smoothstep(0.18, 0.04, imp(x, y)) * 0.8);
         pr *= 1 - gran * deep * speck * 0.9;
         // veta de la madera en las masas
-        if (mad) pr *= 1 - madM * gran * deep * C.smoothstep(0.78, 0.97, mad(x, y));
+        if (mad) pr *= 1 - (madM * 1.4 + 0.08) * (0.4 + gran) * deep * C.smoothstep(0.74, 0.96, mad(x, y));
         a *= pr;
       } else if (it < 0.04) {
         // restos de madera en los vaciados grandes, alineados con el corte
         if (mad) {
           const gv = mad(x * 0.7 + 40, y * 0.7);
           const chat = C.smoothstep(0.86, 0.95, gv) * C.smoothstep(0.04, 0.0, it) * 0.85 * (0.4 + 0.6 * p.granulado);
-          if (chat > 0.02 && C.hash2(x >> 3, y >> 3, 23) > 0.55) a = chat * 0.8;
+          if (chat > 0.02 && C.hash2(x >> 3, y >> 3, 23) > (color ? 0.85 : 0.65)) a = Math.min(1, chat * 1.1);
         }
       }
       if (a <= 0.003) continue;

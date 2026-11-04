@@ -1,14 +1,14 @@
 """
 Trazo · construye todas las bibliotecas de material real a partir de TEXTURES/.
 
-  pin_<familia>.bin   pinceladas enderezadas (óleo, gouache, lápiz, cera, rotulador, línea, acuarela)
+  pin_<familia>.bin   pinceladas enderezadas (óleo, gouache, lápiz, cera, barra, manley, pastel, acuarela)
   manchas.bin         manchas con forma (sellos) con densidad y relieve
   tiles_acuarela.bin  texturas repetibles de aguada (gris)
   tiles_pintura.bin   texturas repetibles de pincelada (gris y color: cálidas / frías)
   ov_*.bin            texturas 9:16 no repetibles (impresión, madera, goteos, grafito)
 
 Las de TEXTURES/REALISTAS tienen prioridad (peso q=3 al elegir).
-uso: python3 tools/build_assets.py [--only pin|manchas|tiles|ov]
+uso: python3 tools/build_assets.py [--only pin|manchas|tiles|ov] [--fam barra,manley]
 """
 import glob, hashlib, json, os, struct, sys
 import numpy as np
@@ -57,19 +57,18 @@ FAMILIES = {
                    os.path.join(TR, "Tres trazos azules texturizados*"), os.path.join(TR, "Gemini_Generated_Image_4k0x*"),
                    os.path.join(TR, "Garabato de carb*"), os.path.join(TR, "Trazo serpenteante*"))),
              (1, g(os.path.join(TR, "CERAS", "*")))],
-    "rotulador": [(1, g(os.path.join(TR, "Cinco líneas azules dibujadas*"), os.path.join(TR, "Cuatro trazos negros*"), os.path.join(TR, "Tres líneas negras*"),
-                        os.path.join(TR, "Líneas azules sobre fondo blanco*"), os.path.join(TR, "Trazos azules sobre fondo blanco (1)*"),
-                        os.path.join(TR, "Pruebas abstractas de rotulador seco.png"), os.path.join(TR, "Garabatos de marcador negro*")))],
-    "linea": [(1, g(os.path.join(TR, "Cinco líneas azules sobre blanco*"), os.path.join(TR, "Cuatro líneas rojas*"), os.path.join(TR, "Líneas azules sobre papel*"),
-                    os.path.join(TR, "Líneas horizontales dibujadas*"), os.path.join(TR, "Líneas rojas sobre papel*"), os.path.join(TR, "Hoja de garabatos en tinta*"),
-                    os.path.join(TR, "Hoja de pruebas de garabatos*"), os.path.join(TR, "Hoja minimalista*"), os.path.join(TR, "Garabatos abstractos en tinta*"),
-                    os.path.join(TR, "Composición minimalista*")))],
+    # ceras de colores: óleo en barra / pastel graso, cera escolar y pastel seco
+    "barra": [(2, g(os.path.join(TR, "CERAS", "*")))],
+    "manley": [(2, g(os.path.join(TR, "Cinco trazos rojos*"), os.path.join(TR, "Cuatro trazos rojos texturizados*"),
+                     os.path.join(TR, "Cinco trazos azules sobre*"), os.path.join(TR, "Tres trazos azules texturizados*")))],
+    "pastel": [(2, g(os.path.join(TR, "Gemini_Generated_Image_4k0x*"), os.path.join(TR, "Garabato de carb*"),
+                     ))],
     "acuarela": [(1, g(os.path.join(TR, "AGUADAS", "*")))],
 }
-WIDTH = {"oleo": 112, "gouache": 96, "cera": 80, "lapiz": 56, "rotulador": 56, "linea": 20, "acuarela": 96}
-HMAXF = {"oleo": 720, "gouache": 720, "cera": 640, "lapiz": 640, "rotulador": 640, "linea": 640, "acuarela": 640}
-CAP = {"oleo": 30, "gouache": 30, "cera": 26, "lapiz": 30, "rotulador": 24, "linea": 24, "acuarela": 21}
-OPAQUE = {"oleo", "gouache", "cera"}
+WIDTH = {"oleo": 112, "gouache": 96, "cera": 80, "lapiz": 56, "barra": 96, "manley": 72, "pastel": 96, "acuarela": 96}
+HMAXF = {"oleo": 720, "gouache": 720, "cera": 640, "lapiz": 640, "barra": 720, "manley": 720, "pastel": 640, "acuarela": 640}
+CAP = {"oleo": 30, "gouache": 30, "cera": 26, "lapiz": 30, "barra": 30, "manley": 30, "pastel": 30, "acuarela": 21}
+OPAQUE = {"oleo", "gouache", "cera", "barra", "manley", "pastel"}
 
 
 def md5(f):
@@ -171,7 +170,10 @@ def frame_of(Dc, sl, sub):
 def build_pinceladas():
     report = {}
     seen = set()
+    fams = sys.argv[sys.argv.index("--fam") + 1].split(",") if "--fam" in sys.argv else None
     for fam, groups in FAMILIES.items():
+        if fams and fam not in fams:
+            continue
         ES.HMAX = HMAXF[fam]
         ES.WT[fam] = WIDTH[fam]
         ES.OPAQUE.clear(); ES.OPAQUE.update(OPAQUE)
@@ -343,10 +345,8 @@ OVERLAYS = {
     "impresion": ["1f8a", "flvu", "gjqu", "v3eb"],
     "madera": ["2a6p", "2uid", "xydf"],
     "goteos": ["2nzv", "bmol", "v9cx"],
-    "salpicaduras": ["1rju", "5u9y"],
     "grafito": ["614e", "h24g", "o4l9"],
     "carbon": ["e6zo", "uwxt"],
-    "aguadas": ["l0b4", "vobl", "uf5m"],
 }
 
 

@@ -144,14 +144,15 @@ async function paint(ctx, p, seg, Lfull, clock) {
   }
 
   // contornos: la madera que se deja alrededor de las formas en las zonas claras
-  if (p.detalle > 0.05) {
+  // (solo en la expresiva: en las demás la forma la definen los cortes, sin perfil gris)
+  if (expr && p.detalle > 0.05) {
     const thr = 0.5 - 0.3 * p.detalle;
     const cw = Math.max(0.7, (0.6 + 1.6 * p.grosor) * s * (expr ? 1.6 : 1));
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const e = ctx.at(ctx.edgeRaw, x, y);
       if (e < thr) continue;
       const i = y * W + x;
-      const k = C.smoothstep(thr, thr + 0.25, e) * C.clamp(cw * 0.6, 0.4, 1);
+      const k = C.smoothstep(thr, thr + 0.12, e);
       ink[i] = Math.max(ink[i], k);
     }
   }
@@ -185,11 +186,16 @@ async function paint(ctx, p, seg, Lfull, clock) {
       for (let y = 0; y < H; y++) {
         const sy = C.clamp(y - oy, 0, H - 1);
         for (let x = 0; x < W; x++) {
-          const sx = C.clamp(x - ox, 0, W - 1);
-          const r = Lfull[sy * W + sx];
+          // filo mellado de la plancha de color (la gubia no sigue la forma al píxel)
+          const jx = (C.bilinear(wob, gw, gh, x / 24 + 20 * k, y / 24) - 0.5) * 3 * s + (C.hash2(x >> 1, y >> 1, 41 + k) - 0.5) * 1.5;
+          const jy = (C.bilinear(wob, gw, gh, x / 24, y / 24 + 20 * k) - 0.5) * 3 * s;
+          const sx = C.clamp((x - ox + jx) | 0, 0, W - 1), sy2 = C.clamp((sy + jy) | 0, 0, H - 1);
+          const r = Lfull[sy2 * W + sx];
           if (regInk[r] !== k) continue;
           const i = y * W + x;
-          let a = 0.95 * inkStr * (0.92 + 0.16 * (C.bilinear(press, gw, gh, x / 24 + k * 13, y / 24) - 0.5));
+          // presión desigual (zonas más pálidas) y veta de la madera en la tinta de color
+          let a = 0.95 * inkStr * (0.86 + 0.28 * (C.bilinear(press, gw, gh, x / 24 + k * 13, y / 24) - 0.5));
+          if (mad) a *= 1 - 0.35 * C.smoothstep(0.55, 0.9, mad(x * 0.9 + 77 * k, y * 0.9));
           if (mad) { const gv = mad(x, y); a *= 1 - madM * 0.8 * C.smoothstep(0.7, 0.95, gv); }
           if (imp) a *= 1 - gran * 0.4 * C.smoothstep(0.25, 0.05, imp(x * 1.3, y * 1.3));
           a *= 1 - gran * 0.25 * C.smoothstep(0.8, 1, C.hash2(x, y, 31 + k));
@@ -206,7 +212,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
       let a = ink[i];
       const it = inter[i];
       // presión desigual: negros algo grisáceos en zonas
-      let pr = Math.min(1, inkStr * (0.97 + 0.1 * (C.bilinear(press, gw, gh, x / 24, y / 24) - 0.5)));
+      let pr = Math.min(1, inkStr * (0.95 + 0.18 * (C.bilinear(press, gw, gh, x / 24, y / 24) - 0.5)));
       if (a > 0.01) {
         // moteado: poros sin tinta, más en el centro de las masas grandes
         const deep = C.smoothstep(0.75, 0.98, it);
@@ -214,14 +220,14 @@ async function paint(ctx, p, seg, Lfull, clock) {
         if (imp) speck = Math.max(speck, C.smoothstep(0.18, 0.04, imp(x, y)) * 0.8);
         pr *= 1 - gran * deep * speck * 0.9;
         // veta de la madera en las masas
-        if (mad) pr *= 1 - madM * gran * deep * C.smoothstep(0.78, 0.97, mad(x, y));
+        if (mad) pr *= 1 - (madM * 1.4 + 0.08) * (0.4 + gran) * deep * C.smoothstep(0.74, 0.96, mad(x, y));
         a *= pr;
       } else if (it < 0.04) {
         // restos de madera en los vaciados grandes, alineados con el corte
         if (mad) {
           const gv = mad(x * 0.7 + 40, y * 0.7);
           const chat = C.smoothstep(0.86, 0.95, gv) * C.smoothstep(0.04, 0.0, it) * 0.85 * (0.4 + 0.6 * p.granulado);
-          if (chat > 0.02 && C.hash2(x >> 3, y >> 3, 23) > 0.55) a = chat * 0.8;
+          if (chat > 0.02 && C.hash2(x >> 3, y >> 3, 23) > (color ? 0.85 : 0.65)) a = Math.min(1, chat * 1.1);
         }
       }
       if (a <= 0.003) continue;

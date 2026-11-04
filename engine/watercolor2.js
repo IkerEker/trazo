@@ -58,8 +58,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const tWhite = 0.035 + (1 - p.cobertura) * 0.22; // luces reservadas
   // variantes: número de aguadas, humedad efectiva e intensidad
   const mode = p.modo || "capas";
-  const K = mode === "densa" ? 5 : mode === "humeda" || mode === "dibujo" ? 3 : 4;
-  const humX = mode === "humeda" ? 0.25 : mode === "densa" ? -0.05 : 0;
+  const K = mode === "densa" ? 5 : mode === "humeda" || mode === "dibujo" || mode === "gotas" ? 3 : 4;
+  const humX = mode === "humeda" ? 0.25 : mode === "gotas" ? 0.15 : mode === "densa" ? -0.05 : 0;
   const FR = K === 5 ? [0, 0.2, 0.4, 0.6, 0.78] : K === 3 ? [0, 0.35, 0.65] : [0, 0.26, 0.5, 0.72];
   const th = [];
   for (let k = 0; k < K; k++) th.push(tWhite + (Math.max(tWhite + 0.1, dmax) - tWhite) * FR[k]);
@@ -237,6 +237,80 @@ async function paint(ctx, p, seg, Lfull, clock) {
   }
   const tileK = 0.12 + 0.18 * p.granulado + (mode === "humeda" ? 0.08 : 0);
 
+  const edgeTile = C.makeGrainTile(ctx.seed + 808, "paper");
+  const etInv = 1 / Math.max(1, Math.sqrt(s) * 1.4);
+  /* ---------- gotas de agua sobre la aguada húmeda ---------- */
+  // Cada gota empuja el pigmento hacia fuera: centro lavado, anillo oscuro de coliflor,
+  // gotitas satélite y, en las grandes, un corrimiento hacia abajo.
+  let dropMul = null;
+  if (mode === "gotas") {
+    dropMul = new Float32Array(N).fill(1);
+    const rnd = C.mulberry32(ctx.seed * 97 + 5);
+    const ang = new Float32Array(64);
+    const nDrops = Math.round((10 + 26 * p.humedad) * Math.sqrt(W * H) / 1400);
+    const rMin = 5 * s, rMax = (24 + 40 * p.grosor) * s;
+    const drop = (cx, cy, r, strength) => {
+      // borde irregular: radio que cambia con el ángulo (lóbulos de coliflor)
+      let a0 = rnd(), a1 = rnd(), a2 = rnd();
+      for (let q = 0; q < 64; q++) { a0 = a0 * 0.8 + rnd() * 0.2; a1 = a1 * 0.5 + rnd() * 0.5; a2 = a2 * 0.2 + rnd() * 0.8; ang[q] = 1 + (a0 - 0.5) * 0.55 + (a1 - 0.5) * 0.22 + (a2 - 0.5) * 0.08; }
+      for (let q = 56; q < 64; q++) ang[q] += (ang[0] - ang[q]) * (q - 55) / 9; // cerrar el contorno
+      const R = r * 1.45;
+      const x0 = Math.max(0, (cx - R) | 0), x1 = Math.min(W - 1, (cx + R) | 0), y0 = Math.max(0, (cy - R) | 0), y1 = Math.min(H - 1, (cy + R) | 0);
+      const rimW = 0.22 + 0.12 * rnd(), sc = 1 / Math.max(2, r * 0.18);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const dx = x - cx, dy = y - cy;
+        const th = Math.atan2(dy, dx), qf = (th / 6.2832 + 0.5) * 63.999, q0 = qf | 0;
+        const rr = r * (ang[q0] + (ang[(q0 + 1) & 63] - ang[q0]) * (qf - q0));
+        // filo de coliflor: ruido a la escala de la gota y grano del papel
+        const nb = C.bilinear(bloomF, bgw, bgh, (x * sc) % (bgw - 1), (y * sc) % (bgh - 1)) - 0.5;
+        const g = C.tileAt(edgeTile, x * etInv * 0.7, y * etInv * 0.7) - 0.5;
+        const d = Math.sqrt(dx * dx + dy * dy) / rr + nb * 0.35 + g * 0.05;
+        if (d > 1.12) continue;
+        let m;
+        if (d < 1 - rimW) m = 1 - strength * (0.5 - 0.2 * Math.pow(Math.max(0, d) / (1 - rimW), 2));     // centro lavado
+        else if (d < 1) m = 1 - strength * 0.3 + strength * 1.05 * C.smoothstep(1 - rimW, 1, d);       // el pigmento se acumula hacia el filo
+        else m = 1 + strength * 0.75 * (1 - C.smoothstep(1, 1.12, d));                                   // fleco que se abre
+        dropMul[y * W + x] *= m;
+      }
+    };
+    for (let k = 0; k < nDrops; k++) {
+      // las gotas caen donde hay color
+      let cx = 0, cy = 0;
+      for (let t = 0; t < 6; t++) {
+        cx = rnd() * W; cy = rnd() * H;
+        const r = wl[Math.min(wh - 1, (cy / qy) | 0) * ww + Math.min(ww - 1, (cx / qx) | 0)];
+        if (nCover[r] > 0) break;
+      }
+      const r = rMin + (rMax - rMin) * Math.pow(rnd(), 2.2);
+      const st = 0.75 + 0.25 * rnd();
+      drop(cx, cy, r, st);
+      // gotitas satélite al salpicar
+      const ns = (rnd() * 3) | 0;
+      for (let j = 0; j < ns; j++) {
+        const a = rnd() * 6.28, dd = r * (1.4 + 1.2 * rnd());
+        drop(cx + Math.cos(a) * dd, cy + Math.sin(a) * dd, Math.max(rMin, r * (0.15 + 0.2 * rnd())), st * 0.7);
+      }
+      // corrimiento: el agua de las gotas grandes baja arrastrando pigmento
+      if (r > rMin + (rMax - rMin) * 0.35 && rnd() < 0.35) {
+        const L = r * (2 + 4 * rnd()), w0 = r * (0.18 + 0.12 * rnd());
+        let x = cx + (rnd() - 0.5) * r * 0.5;
+        for (let t = 0; t < L; t += 1) {
+          x += (rnd() - 0.5) * 0.6;
+          const y = (cy + r * 0.8 + t) | 0;
+          if (y >= H) break;
+          const w = w0 * (1 - 0.6 * t / L);
+          for (let xx = Math.max(0, (x - w - 1) | 0); xx <= Math.min(W - 1, (x + w + 1) | 0); xx++) {
+            const e = Math.abs(xx - x) / w;
+            if (e > 1) continue;
+            dropMul[y * W + xx] *= 0.7 + 0.55 * C.smoothstep(0.45, 1, e);
+          }
+        }
+        drop(x, cy + r * 0.8 + L, w0 * 1.3, 0.9); // gota al final del corrimiento
+      }
+      if ((k & 7) === 0) await clock.tick(0.7);
+    }
+  }
+
   /* ---------- composición a resolución completa ---------- */
   const out = new Uint8Array(N * 4);
   const selFull = ctx.selFull, data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
@@ -246,8 +320,6 @@ async function paint(ctx, p, seg, Lfull, clock) {
   const dnK = 0.55 + 0.4 * p.intensidad;
   const cover = ctx.cover, fullCover = p.cobertura >= 0.995;
   const L0 = layers.length;
-  const edgeTile = C.makeGrainTile(ctx.seed + 808, "paper");
-  const etInv = 1 / Math.max(1, Math.sqrt(s) * 1.4);
   const edgeG = 0.3 + 0.25 * p.granulado, edgeF = 0.22, dryK = 0.35 + 0.5 * p.granulado;
   for (let y = 0; y < H; y++) {
     let wy = (y + 0.5) / qy - 0.5; if (wy < 0) wy = 0; if (wy > wh - 1) wy = wh - 1;
@@ -282,7 +354,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
         const dens = (1 + rimK * rm) * (1 + turbK * (tu - 0.5) * 2 * (0.6 + Lk.wet)) *
                      (1 + granK * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
                      (ltiles[k] ? 1 + tileK * Math.max(-2, Math.min(2, ltiles[k].l(x, y))) : 1);
-        const f = cv * (dens < 0.1 ? 0.1 : dens);
+        const dm = dropMul && Lk.wet > 0.5 ? dropMul[i] : 1;
+        const f = cv * (dens < 0.1 ? 0.1 : dens) * dm;
         AR += f * (Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11);
         AG += f * (Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11);
         AB += f * (Lk.aB[i00] * w00 + Lk.aB[i10] * w10 + Lk.aB[i01] * w01 + Lk.aB[i11] * w11);
