@@ -17,9 +17,10 @@ const out = process.argv[2] || ".";
   const ok = (c, m) => { if (!c) errors.push("FALLO: " + m); else console.log("OK  " + m); };
 
   // 1) cambiar a Acuarela
-  await page.click("#techs .tech:nth-child(5)");
+  await page.click("#techs .tech:nth-child(4)");
   await page.waitForFunction(() => /Acuarela · vista previa/.test(document.getElementById("pvStatus").textContent), null, { timeout: 30000 });
-  ok(await page.$eval("#techs .tech:nth-child(5)", (e) => e.classList.contains("on")), "cambio de técnica a Acuarela y vista previa");
+  ok(await page.$eval("#techs .tech:nth-child(4)", (e) => e.classList.contains("on")), "cambio de técnica a Acuarela y vista previa");
+  ok((await page.$$("#techs .tech")).length === 8, "8 técnicas");
 
   // 2) arrastrar el slider de grosor
   await page.click("#tab-ajustes");
@@ -38,7 +39,7 @@ const out = process.argv[2] || ".";
   await page.mouse.click(box.x + 5, box.y + box.height / 2);
   await page.mouse.click(box.x + 5, box.y + box.height / 2);
   const vals2 = await page.$$eval(".sl-val", (els) => els.map((e) => e.textContent));
-  ok(vals2[1] === "45", "doble clic restablece grosor a 45 (" + vals2[1] + ")");
+  ok(vals2[1] === "55", "doble clic restablece grosor a 55 (" + vals2[1] + ")");
 
   // 4) guardar preset
   await page.click("#tab-tecnica");
@@ -46,15 +47,17 @@ const out = process.argv[2] || ".";
   await page.click("#btnSavePreset");
   ok(await page.$$eval(".chip.user", (els) => els.map((e) => e.textContent).includes("Mi acuarela")), "preset de usuario guardado");
   await page.waitForTimeout(400);
-  const stored = await page.evaluate(() => localStorage.getItem("trazo.state.v1"));
+  const stored = await page.evaluate(() => localStorage.getItem("trazo.state.v2"));
   ok(stored && stored.includes("Mi acuarela"), "estado persistido en localStorage");
 
-  // 5) lápiz de color (interruptor)
-  await page.click("#techs .tech:nth-child(1)");
+  // 5) variantes: preset en Técnica y modo en Ajustes
+  await page.click("#techs .tech:nth-child(2)");
+  ok((await page.$$eval("#presets .chip", (els) => els.map((e) => e.textContent))).slice(0, 4).join("|") === "Línea suelta|Rayado|Carboncillo|Negros expresivos", "4 variantes de lápiz");
+  await page.click("#presets .chip:nth-child(3)");
   await page.click("#tab-ajustes");
-  ok(!!(await page.$(".sl.disabled")), "variaciones desactivadas con lápiz de grafito");
-  await page.click("#sliders .toggle-row");
-  ok(!(await page.$(".sl.disabled")), "variaciones activas con lápiz de color");
+  ok(await page.$eval("#sliders .chips .chip:nth-child(3)", (e) => e.classList.contains("on")), "la variante Carboncillo queda marcada en Ajustes");
+  await page.click("#sliders .chips .chip:nth-child(4)");
+  ok(await page.$eval("#sliders .chips .chip:nth-child(4)", (e) => e.classList.contains("on")), "cambiar de variante en Ajustes");
   await page.waitForTimeout(500);
   await waitPreview();
   await page.screenshot({ path: out + "/flow_lapiz_color.png" });

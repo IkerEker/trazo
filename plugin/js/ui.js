@@ -9,7 +9,7 @@
   const T = Engine.Techniques;
   const $ = (id) => document.getElementById(id);
 
-  const STORE_KEY = "trazo.state.v1";
+  const STORE_KEY = "trazo.state.v2";
   const PREVIEW_MIN = 360, PREVIEW_MAX = 720;
   let previewLong = 440; // se adapta al tamaño del marco
   const QUALITY = {
@@ -107,18 +107,20 @@
   }
   /** Biblioteca de trazos y soporte de la técnica. Si faltan, el motor usa su modelo procedural. */
   async function texturesFor(tech) {
-    const [library, support] = await Promise.all([
-      loadTexture(tech),
-      loadTexture("soporte-" + (Engine.SUPPORT_FOR[tech] || "dibujo")),
-    ]);
-    return { library, support };
+    const names = Engine.ASSETS_FOR[tech] || [];
+    const loaded = await Promise.all(names.map((nm) => loadTexture(nm)));
+    const assets = {};
+    names.forEach((nm, i) => { if (loaded[i]) assets[nm] = loaded[i]; });
+    const support = await loadTexture("soporte-" + (Engine.SUPPORT_FOR[tech] || "dibujo"));
+    return { assets, support };
   }
   async function showTexInfo() {
     const tech = state.tech;
     const t = await texturesFor(tech);
     if (tech !== state.tech) return;
-    const n = t.library && t.library.samples ? t.library.samples.length : 0;
-    $("statusTech").textContent = techDef().name + (n ? " · " + n + " trazos reales" : "");
+    let n = 0, m = 0;
+    for (const k of Object.keys(t.assets)) { const a = t.assets[k]; if (a.samples) n += a.samples.length; else if (a.items) m += a.items.length; }
+    $("statusTech").textContent = techDef().name + (n || m ? " · " + (n + m) + " materiales reales" : "");
   }
 
   const cur = () => state.params[state.tech];
@@ -248,7 +250,6 @@
       }
       box.appendChild(c);
     };
-    mk("Por defecto", {}, false);
     for (const p of def.presets) mk(p.name, p.values, false);
     for (const p of state.userPresets[state.tech]) mk(p.name, p.values, true);
   }
@@ -277,6 +278,15 @@
     for (const k of Object.keys(sliders)) delete sliders[k];
     const def = techDef();
     const visible = new Set(def.params.concat(def.colorParams || []));
+    // variante: cambia el modo de pintar sin tocar los ajustes
+    box.appendChild(el("div", "group-title", "VARIANTE"));
+    const vrow = el("div", "chips");
+    for (const v of def.variants || []) {
+      const c = el("div", "chip" + (cur().modo === v.id ? " on" : ""), v.name);
+      onTap(c, () => { cur().modo = v.id; state.activePreset[state.tech] = null; save(); buildSliders(); buildPresets(); schedulePreview(30); });
+      vrow.appendChild(c);
+    }
+    box.appendChild(vrow);
     for (const g of GROUPS) {
       const keys = g.keys.filter((k) => visible.has(k));
       const toggles = g.toggles ? (def.toggles || []) : [];
@@ -522,7 +532,7 @@
       if (my !== pvToken) return;
       const res = await Engine.render(
         { width: src.width, height: src.height, data: src.data, components: src.components },
-        { technique: state.tech, params: cur(), seed: state.seed, selection, paper: state.paper, library: tex.library, support: tex.support },
+        { technique: state.tech, params: cur(), seed: state.seed, selection, paper: state.paper, assets: tex.assets, support: tex.support },
         { onProgress: (f) => { if (my === pvToken) setPvProgress(f); }, shouldCancel: () => my !== pvToken, sliceMs: 24 }
       );
       if (my !== pvToken) return;
@@ -688,7 +698,7 @@
         const tex = await texturesFor(def.id);
         const res = await Engine.render(
           { width: s.width, height: s.height, data: s.data, components: s.components },
-          { technique: def.id, params, seed, selection, paper: state.paper, library: tex.library, support: tex.support },
+          { technique: def.id, params, seed, selection, paper: state.paper, assets: tex.assets, support: tex.support },
           { onProgress: (f, label) => report(0.04 + f * 0.86, label), shouldCancel: cancelled, sliceMs: 60 }
         );
         if (cancelled()) throw new Engine.CancelError();

@@ -10,6 +10,10 @@ const BASE = {
   acuarela: { c: [250, 248, 243], amp: 15, kind: "rough", scale: 2.0 },
   gouache:  { c: [244, 241, 234], amp: 10, kind: "paper", scale: 1.6 },
   oleo:     { c: [234, 228, 216], amp: 20, kind: "canvas", scale: 1.0 },
+  rotulador:  { c: [251, 251, 249], amp: 5,  kind: "paper", scale: 1.2 },
+  mixtalg:    { c: [246, 243, 236], amp: 9,  kind: "paper", scale: 1.2 },
+  mixta:      { c: [232, 222, 202], amp: 11, kind: "paper", scale: 1.2 },
+  xilografia: { c: [243, 237, 224], amp: 10, kind: "paper", scale: 1.4 },
 };
 
 async function makePaper(technique, W, H, seed, clock, prep) {

@@ -8,13 +8,20 @@
 const C = require("./core.js");
 const S = require("./strokes.js");
 const Lib = require("./library.js");
+const K = require("./kit.js");
 
-async function paint(ctx, p, clock, seg, Lfull) {
+async function paint(ctx, p, clock, seg, Lfull, opts) {
+  opts = opts || {};
   const { W, H, N, s, aw, ah } = ctx;
   const colorMode = !!p.color;
+  const mode = p.modo || "rayado";
+  const onlyLines = opts.only === "contornos" || mode === "boceto";
+  const noLines = opts.only === "tono";
   const rand = C.mulberry32(ctx.seed * 13 + 3);
 
-  const lib = ctx.lib && ctx.lib.samples && ctx.lib.samples.length ? ctx.lib.samples : null;
+  let libSrc = opts.lib || ctx.lib;
+  if (mode === "carbon" && ctx.strokesOf) libSrc = ctx.strokesOf(["pin_cera"]) || libSrc;
+  const lib = libSrc && libSrc.samples && libSrc.samples.length ? libSrc.samples : null;
   /* ----- tono objetivo (oscuridad 0..1) a resolución de análisis ----- */
   const n = aw * ah;
   const tone = new Float32Array(n);
@@ -34,13 +41,15 @@ async function paint(ctx, p, clock, seg, Lfull) {
   const D = new Float32Array(N); // oscuridad acumulada
   /* ----- difumino: tono base suave en las zonas lisas (piel, cielo, paredes) ----- */
   const regAng = seg ? new Float32Array(seg.reg.n) : null;
-  if (seg && Lfull) {
+  if (seg && Lfull && !onlyLines) {
     const reg = seg.reg;
     const papS = ctx.paperPrep ? Lib.paperSampler(ctx.paperPrep, Lib.paperScale(Math.max(W, H))) : null;
     const smK = new Float32Array(reg.n);
     const rA = C.mulberry32(ctx.seed * 5 + 1);
     for (let r = 0; r < reg.n; r++) {
-      smK[r] = Math.pow(1 - reg.act[r], 1.4) * (0.45 + 0.35 * (1 - reg.imp[r] * 0.5));
+      smK[r] = Math.pow(1 - reg.act[r], 1.4) * (0.45 + 0.35 * (1 - reg.imp[r] * 0.5)) * (mode === "carbon" ? 1.6 : mode === "linea" ? 0.25 : mode === "mixta" ? 0.5 : 1);
+      // negros expresivos: masas plenas de grafito/carbón en las zonas oscuras
+      if (mode === "negros") smK[r] = 1 - reg.lum[r] > 0.5 ? 1.6 : smK[r] * 0.4;
       // dirección del rayado de la zona: sigue la forma si es clara; si no, diagonal de mano
       const th = 0.5 * Math.atan2(reg.os[r], reg.oc[r]);
       regAng[r] = reg.coh[r] > 0.45 ? th : -Math.PI / 4 + (rA() - 0.5) * 0.5;
@@ -55,7 +64,8 @@ async function paint(ctx, p, clock, seg, Lfull) {
         if (k < 0.02) continue;
         const t = ctx.at(tb, x, y);
         const g = papS ? papS.eq(x, y) : 0.5;
-        D[i] = Math.min(0.6, t * k) * (0.72 + 0.45 * (g - 0.5) + 0.28);
+        const cap = mode === "negros" && k > 1.5 ? 0.93 : mode === "carbon" ? 0.75 : 0.6;
+        D[i] = Math.min(cap, t * k) * (0.72 + 0.45 * (g - 0.5) + 0.28);
       }
       if ((y & 63) === 0) await clock.tick(0);
     }
@@ -97,14 +107,14 @@ async function paint(ctx, p, clock, seg, Lfull) {
     return regAng[r] - phi + angles[j];
   }
 
-  async function hatchPass(j, isContour) {
+  async function hatchPass(j, isContour, alt) {
     const Rj = isContour ? (lib ? Math.max(0.45, (0.32 + p.grosor * 1.4) * s) : R * 0.85) : R * (j === 0 ? 1 : 0.92);
     const useLib = lib && !isContour;
     const pool = useLib ? (j < 2 && libLight.length ? libLight : lib) : null;
     const Rc = lib ? Math.max(0.45, (0.32 + p.grosor * 1.4) * s) : R; // contornos: línea fina
     const sp = isContour ? Math.max(1, Rc * 3.2) : lib ? Math.max(1.0, R * 1.3, L * 0.16) : Math.max(1.0, R * 2.6 + 0.4 * s, L * 0.12);
     const cols = Math.ceil(W / sp), rows = Math.ceil(H / sp);
-    const edgeThr = 0.42 - 0.3 * p.detalle;
+    const edgeThr = (0.42 - 0.3 * p.detalle) * (mode === "linea" || mode === "mixta" ? 0.75 : mode === "boceto" ? 0.9 : 1) * (alt ? 1.25 : 1);
     let cnt = 0, cap = 1 << 16;
     let cx = new Float32Array(cap), cy = new Float32Array(cap);
     for (let gy = 0; gy < rows; gy++) {
@@ -183,7 +193,8 @@ async function paint(ctx, p, clock, seg, Lfull) {
       }
       const A = raster.A, tl = raster.tl, tg = raster.tg, U = raster.U, V = raster.V;
       const prL = useLib ? pr * 0.85 : pr;
-      const prC = lib && isContour ? 0.62 : 1; // contornos más ligeros sobre grafito real
+      let prC = lib && isContour ? 0.62 : 1; // contornos más ligeros sobre grafito real
+      if (isContour) prC *= (mode === "linea" || mode === "mixta" ? 1.35 : mode === "negros" ? 1.5 : mode === "boceto" ? 0.8 : 1) * (alt ? 0.55 : 1) * (opts.contourMul || 1);
       for (let tt = 0; tt < nt; tt++) {
         const li = tl[tt], g = tg[tt];
         const xx = g % W, yy = (g / W) | 0;
@@ -212,8 +223,28 @@ async function paint(ctx, p, clock, seg, Lfull) {
     }
   }
 
-  for (let j = 0; j < nPass; j++) await hatchPass(j, false);
-  if (p.detalle > 0.02) await hatchPass(nPass, true);
+  // qué pasadas de rayado lleva cada variante
+  const passes = onlyLines ? [] : mode === "linea" ? [2, 3] : mode === "negros" ? [0, 1] : mode === "mixta" ? [0, 1] : [0, 1, 2, 3];
+  for (const j of passes) await hatchPass(j, false);
+  if (mode === "carbon" && !onlyLines) {
+    // difuminado con el dedo o el trapo y luces sacadas con goma
+    const tmp = new Float32Array(N), bD = Float32Array.from(D);
+    const rb = Math.max(1, Math.round(3 * s));
+    C.boxBlurH(bD, tmp, W, H, rb); C.boxBlurV(tmp, bD, W, H, rb);
+    for (let i = 0; i < N; i++) D[i] = D[i] * 0.45 + bD[i] * 0.55;
+    const ovc = ctx.assets && ctx.assets.ov_carbon && ctx.assets.ov_carbon.items.length ? K.overlaySampler(ctx.assets.ov_carbon.items[0], W, H) : null;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      const l = ctx.at(ctx.lum, x, y);
+      D[i] *= 1 - 0.75 * C.smoothstep(0.68, 0.9, l);
+      if (ovc) D[i] *= 0.85 + 0.3 * (ovc(x, y) < 0.5 ? 0.5 + (0.5 - ovc(x, y)) : 0.5);
+    }
+  }
+  if (!noLines && p.detalle > 0.02) {
+    await hatchPass(nPass, true);
+    // líneas de búsqueda: una segunda pasada de contorno más ligera y desplazada
+    if (mode === "linea" || mode === "boceto" || mode === "mixta") await hatchPass(nPass, true, 1);
+  }
 
   /* ----- salida ----- */
   const out = new Uint8Array(N * 4);

@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage as ndi
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-SRC = os.path.join(ROOT, "TEXTURES", "PINCELADAS")
+SRC = os.path.join(ROOT, "TEXTURES", "TRAZOS")
 OUT_LIB = os.path.join(ROOT, "plugin", "textures")
 OUT_DBG = os.path.join(ROOT, "tools", "out")
 
@@ -33,6 +33,7 @@ FOLDERS = {"OLEO": "oleo", "GUACHE": "gouache", "CERAS": "ceras", "LAPIZ": "lapi
 WT = {"oleo": 128, "gouache": 96, "ceras": 96, "acuarela": 96, "lapiz": 80}  # ancho de la textura
 OPAQUE = {"oleo", "gouache", "ceras"}
 BODY_FRAC = 0.70  # fracción del ancho de textura que ocupa el cuerpo del trazo
+HMAX = None       # alto máximo de la textura (si se supera, se estrecha)
 
 
 def smoothstep(e0, e1, x):
@@ -56,8 +57,12 @@ def fit_background(L):
     terms = [np.ones_like(xn), xn, yn, xn * xn, xn * yn, yn * yn, xn ** 3, xn * xn * yn, xn * yn * yn, yn ** 3]
     Amat = np.stack([t.ravel() for t in terms], 1)
     z = small.ravel().astype(np.float64)
-    mask = z > np.percentile(z, 50)
+    mask = z >= np.percentile(z, 50)
+    if mask.sum() < 10:
+        return np.full(L.shape, max(0.3, float(np.median(L))), np.float32)
     for _ in range(5):
+        if mask.sum() < 10:
+            break
         coef, *_ = np.linalg.lstsq(Amat[mask], z[mask], rcond=None)
         fit = Amat @ coef
         r = z - fit
@@ -191,6 +196,10 @@ def extract_stroke(Dm, Msoft, tech, xoff):
     pad = int(0.15 * wb)
     ya, yb = max(0, y0 - pad), min(h - 1, y1 + pad)
     Lt = int(round((yb - ya) * s))
+    if HMAX and Lt > HMAX:
+        Wt = max(12, int(Wt * HMAX / Lt))
+        s = BODY_FRAC * Wt / wb
+        Lt = int(round((yb - ya) * s))
     # enderezar siguiendo la línea central (con antialias)
     Dpre = ndi.gaussian_filter(Dm, 0.45 / s)
     jj, ii = np.mgrid[0:Lt, 0:Wt].astype(np.float64)
@@ -276,6 +285,7 @@ def write_library(tech, samples, path):
     for s in samples:
         ch = 2 if s["S"] is not None else 1
         meta = {k: s[k] for k in ("w", "h", "head", "tail", "top", "bottom", "fill", "paint", "aspect")}
+        meta["q"] = s.get("q", 1)
         meta.update({"offset": off, "channels": ch})
         header["samples"].append(meta)
         blobs.append(s["A"].tobytes())

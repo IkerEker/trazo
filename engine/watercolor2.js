@@ -18,6 +18,7 @@ const C = require("./core.js");
 const S = require("./strokes.js");
 const Lib = require("./library.js");
 const Seg = require("./segment.js");
+const Kit = require("./kit.js");
 
 const LAYER_W = [1.15, 1.0, 0.9, 0.8, 0.75];
 
@@ -55,9 +56,13 @@ async function paint(ctx, p, seg, Lfull, clock) {
   let dmax = 0;
   for (let r = 0; r < reg.n; r++) { dark[r] = 1 - reg.lum[r]; if (dark[r] > dmax) dmax = dark[r]; }
   const tWhite = 0.035 + (1 - p.cobertura) * 0.22; // luces reservadas
-  const K = 4;
+  // variantes: número de aguadas, humedad efectiva e intensidad
+  const mode = p.modo || "capas";
+  const K = mode === "densa" ? 5 : mode === "humeda" || mode === "dibujo" ? 3 : 4;
+  const humX = mode === "humeda" ? 0.25 : mode === "densa" ? -0.05 : 0;
+  const FR = K === 5 ? [0, 0.2, 0.4, 0.6, 0.78] : K === 3 ? [0, 0.35, 0.65] : [0, 0.26, 0.5, 0.72];
   const th = [];
-  for (let k = 0; k < K; k++) th.push(tWhite + (Math.max(tWhite + 0.1, dmax) - tWhite) * [0, 0.26, 0.5, 0.72][k]);
+  for (let k = 0; k < K; k++) th.push(tWhite + (Math.max(tWhite + 0.1, dmax) - tWhite) * FR[k]);
   const nCover = new Int8Array(reg.n);
   for (let r = 0; r < reg.n; r++) { let c = 0; for (let k = 0; k < K; k++) if (dark[r] >= th[k]) c++; nCover[r] = c; }
   const wsum = new Float32Array(K + 1);
@@ -68,7 +73,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
     const i = y * ww + x, r = wl[i];
     Seg.modelColor(seg, r, (x + 0.5) / ww, (y + 0.5) / wh, col);
     // la acuarela no llega al negro absoluto ni a colores de pantalla
-    const pig = 0.82 + 0.18 * p.intensidad;
+    const pig = (mode === "densa" ? 0.9 : 0.82) + 0.18 * p.intensidad;
     absR[i] = -Math.log(Math.max(0.035, 1 - (1 - col[0]) * pig));
     absG[i] = -Math.log(Math.max(0.035, 1 - (1 - col[1]) * pig));
     absB[i] = -Math.log(Math.max(0.035, 1 - (1 - col[2]) * pig));
@@ -99,7 +104,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   }
   for (let k = 0; k < K; k++) {
     const wet = k === 0 ? 1 : k === 1 ? 0.65 : k === 2 ? 0.3 : 0.12; // humedad de cada pasada
-    const hum = p.humedad;
+    const hum = Math.min(1, p.humedad + humX);
     const amp = (0.8 + 4.5 * hum * wet) * ss * 1.6; // ondulación del borde (px de trabajo)
     // máscara con borde ondulado
     const m = new Float32Array(wn);
@@ -215,6 +220,16 @@ async function paint(ctx, p, seg, Lfull, clock) {
   /* ---------- pinceladas reales en zonas con textura (pincel seco, matices) ---------- */
   const Dn = new Float32Array(N);
   await brushMarks(ctx, p, seg, Lfull, lib, Dn, rand, clock);
+  // texturas de aguada reales: una por capa, a escala física (las REALISTAS primero)
+  const tl = ctx.assets && ctx.assets.tiles_acuarela;
+  const ltiles = [];
+  for (let k = 0; k < layers.length; k++) {
+    if (!tl) { ltiles.push(null); continue; }
+    const tags = mode === "humeda" && k < 2 ? ["manchas", "aguada"] : k === layers.length - 1 ? ["grano", "aguada"] : ["aguada"];
+    const it = Kit.pickTile(tl, rand, tags);
+    ltiles.push(Kit.tileSampler(it, Kit.tileScale(it, Math.max(W, H), 0.8 + 0.6 * rand()), rand() * 6.28, rand() * 999, rand() * 999));
+  }
+  const tileK = 0.12 + 0.18 * p.granulado + (mode === "humeda" ? 0.08 : 0);
 
   /* ---------- composición a resolución completa ---------- */
   const out = new Uint8Array(N * 4);
@@ -246,7 +261,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
         // densidad: anillo de borde, turbulencia y granulado (más en el anillo y en lo oscuro)
         const bl = Lk.bloom[i00] * w00 + Lk.bloom[i10] * w10 + Lk.bloom[i01] * w01 + Lk.bloom[i11] * w11;
         const dens = (1 + rimK * rm) * (1 + turbK * (tu - 0.5) * 2 * (0.6 + Lk.wet)) *
-                     (1 + granK * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl;
+                     (1 + granK * (0.5 - gr) * (0.25 + 1.9 * rm + 0.6 * Lk.wet)) * bl *
+                     (ltiles[k] ? 1 + tileK * Math.max(-2, Math.min(2, ltiles[k].l(x, y))) : 1);
         const f = cv * (dens < 0.1 ? 0.1 : dens);
         AR += f * (Lk.aR[i00] * w00 + Lk.aR[i10] * w10 + Lk.aR[i01] * w01 + Lk.aR[i11] * w11);
         AG += f * (Lk.aG[i00] * w00 + Lk.aG[i10] * w10 + Lk.aG[i01] * w01 + Lk.aG[i11] * w11);

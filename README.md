@@ -1,21 +1,36 @@
 # Trazo · Pintura tradicional para Photoshop
 
-Plugin UXP para Photoshop que convierte fotografías en **Lápiz, Óleo, Gouache, Ceras o Acuarela**.
-Analiza la imagen para decidir la dirección de cada trazo (siguen bordes y formas, no son
-aleatorios) y crea la pintura en una **capa nueva con transparencia**: lo que no se pinta
-queda transparente, y el papel o el lienzo va en una capa aparte.
+Plugin UXP para Photoshop que convierte fotografías en **8 técnicas tradicionales, con 4 variantes
+cada una**. Analiza la imagen como lo haría un artista: la ve en manchas, decide la dirección de
+cada trazo según las formas y crea la obra en una **capa nueva con transparencia**. El papel o
+el lienzo va en una capa aparte (casilla **Papel**).
 
-**Novedad en 1.2: pinta como un pintor.** Primero ve la imagen en *manchas* (zonas de
-color con su degradado) y las cubre con pintura plana o casi plana. Después coloca
-pinceladas decididas que siguen la forma y nunca se salen de su mancha: si una pincelada no
-cabe entera, no se pinta, así que no hay puntitos. La pasta gruesa va solo en las luces y
-las sombras quedan finas. La acuarela se pinta con aguadas superpuestas de claro a oscuro,
-con bordes húmedos, floraciones, pigmento acumulado al secar y granulado.
+| Técnica | Variantes (presets) |
+|---|---|
+| Óleo | Planos y espátula · Gestual · Boceto sobre imprimatura · Matérico |
+| Lápiz (grises) | Línea suelta · Rayado · Carboncillo · Negros expresivos |
+| Gouache | Plein air · Línea y plano · Retrato expresivo · Diluido |
+| Acuarela | Manchas húmedas · Paisaje por capas · Con dibujo · Densa |
+| Rotulador | Moda (alcohol + línea) · Vetas de alcohol · Acuarelables · Línea y relleno |
+| Mixta L+G | Más lápiz · Equilibrada · Más gouache · Manchas sueltas |
+| Mixta total | Cuaderno · Collage · Cartel · Impresión |
+| Xilografía | Realista · Expresiva · Dos tintas · Tres tintas |
 
-**Desde 1.1: pinta con trazos reales.** Cada pincelada es una muestra real (87 trazos
-separados de las imágenes de `TEXTURES/`) que se dobla a lo largo del recorrido. Conserva su
-forma, la carga inicial, las vetas de las cerdas, el final seco y el relieve. El papel y el
-lienzo también son reales: se sacan del fondo de esas imágenes.
+Cada variante rellena todos los ajustes. Después se pueden tocar en **Ajustes**, donde también se
+puede cambiar de variante sin perder los valores.
+
+**Pinta con material real.** Lo que hay en `TEXTURES/` se convierte en las bibliotecas de
+`plugin/textures/` (`tools/build_assets.py`):
+- **Pinceladas** (~185): óleo, gouache, lápiz, cera y carbón, rotulador, línea de tinta y acuarela.
+  Se doblan a lo largo de cada recorrido y conservan la carga inicial, las cerdas, el final seco
+  y el relieve. Las de `REALISTAS` tienen prioridad.
+- **Manchas** (22): se superponen en las zonas amplias, como pintura añadida.
+- **Texturas repetibles** (50): aguadas y granulado para la acuarela, brochazos cálidos, fríos y
+  grises para la pintura. Se eligen por temperatura de color y se giran con la forma.
+- **Texturas 9:16** (con poco peso): ruido de impresión, veta de madera, goteos, grafito y carbón.
+- **Papel y lienzo**: su grano se marca siempre en las zonas veladas, esté o no visible el papel.
+
+Cómo se analizó cada técnica antes de programarla: [`REFERENCIAS/ESTUDIO_TECNICAS.md`](REFERENCIAS/ESTUDIO_TECNICAS.md).
 
 - Sin dependencias externas. Las texturas de cada técnica se cargan solo al usarla.
 - Vista previa en vivo que se cancela sola al mover un control.
@@ -28,7 +43,7 @@ lienzo también son reales: se sacan del fondo de esas imágenes.
 **Requisitos:** Photoshop 2024 (v25.0) o posterior y un documento en modo **RGB** de 8 o 16 bits.
 
 ### Opción A · Doble clic (recomendada para usar)
-1. Haz doble clic en `dist/Trazo-1.2.0.ccx`. Creative Cloud lo instala.
+1. Haz doble clic en `dist/Trazo-1.3.0.ccx`. Creative Cloud lo instala.
 2. En Photoshop: **Plugins › Trazo · Pintura tradicional**.
 
 > El `.ccx` no está firmado por Adobe Marketplace, así que Creative Cloud puede avisar de que
@@ -46,7 +61,7 @@ lienzo también son reales: se sacan del fondo de esas imágenes.
 
 1. Selecciona la capa que quieres pintar. Si la capa activa no es de píxeles (texto, grupo…),
    se usa la imagen combinada.
-2. Pestaña **1 · Técnica**: elige Lápiz, Óleo, Gouache, Ceras o Acuarela y, si quieres, un preset.
+2. Pestaña **1 · Técnica**: elige una de las 8 técnicas y una de sus 4 variantes.
 3. Pestaña **2 · Ajustes**: ajusta los controles. Solo aparecen los que tienen sentido para
    esa técnica. Con doble clic sobre un control vuelve a su valor por defecto.
 4. Pestaña **3 · Salida**: calidad, uso de la selección, capas, semilla y exportación.
@@ -72,7 +87,7 @@ lienzo también son reales: se sacan del fondo de esas imágenes.
 | Longitud del trazo | Lo largo que es cada pincelada | Todas |
 | Curvatura del trazo | 0 = trazos rectos · 100 = siguen las formas | Todas |
 | Cobertura del blanco | Cuánto lienzo se cubre; lo no cubierto queda transparente | Todas |
-| Empaste | Relieve y brillo de la pintura gruesa | Óleo, Gouache, Ceras |
+| Empaste | Relieve y brillo de la pintura gruesa | Óleo, Gouache, Mixta L+G |
 | Humedad · Granulado | El color se corre / el pigmento se asienta en el grano | Acuarela |
 | Sombreado cruzado | Ángulo entre las capas de rayado | Lápiz |
 | Lápiz de color | Colores de la foto en lugar de grafito | Lápiz |
@@ -94,13 +109,16 @@ lienzo también son reales: se sacan del fondo de esas imágenes.
 ### Tiempos orientativos
 Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript (V8) que usa UXP:
 
-| Técnica | Borrador (1,5 MP) | Alta (6 MP) |
-|---|---|---|
-| Lápiz | 3,3 s | 5,9 s |
-| Óleo | 2,8 s | 6,1 s |
-| Gouache | 2,9 s | 5,8 s |
-| Ceras | 2,8 s | 5,8 s |
-| Acuarela | 4,5 s | 6,0 s |
+| Técnica | Alta (6 MP) |
+|---|---|
+| Óleo | 7,0 s |
+| Lápiz | 4,8 s |
+| Gouache | 6,4 s |
+| Acuarela | 6,0 s |
+| Rotulador | 2,5 s |
+| Mixta L+G | 9,0 s |
+| Mixta total | 8,7 s |
+| Xilografía | 3,4 s |
 
 La vista previa del panel tarda alrededor de 1 s. A 6 MP el motor usa unos 300–450 MB de
 memoria; en calidad Máxima (16 MP) puede pasar de 1 GB. Durante GENERAR, Photoshop muestra su barra
@@ -118,7 +136,7 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    se fusionan mientras su color siga siendo un único degradado; en las zonas poco
    importantes se simplifica más. Cada mancha guarda su degradado de color, su textura, su
    orientación, su importancia y su anchura.
-3. **Óleo, Gouache y Ceras** (`painter2.js`), en este orden:
+3. **Óleo y Gouache** (`painter2.js`), en este orden:
    - **Mancha:** pintura plana con bordes orgánicos. Los bordes se pierden en el fondo y
      quedan nítidos en lo importante.
    - **Frotado:** pasadas anchas y finas que dan textura de pincel a las zonas planas.
@@ -168,9 +186,13 @@ engine/              ← código fuente del motor (módulos)
   analysis.js        ← campo de direcciones, bordes, cobertura, pirámide de color
   strokes.js         ← trazado y rasterizado de pinceladas
   segment.js         ← manchas: SLIC, fusión por degradado, contornos, etiquetas
-  painter2.js        ← Óleo, Gouache, Ceras (mancha + pinceladas con intención)
+  painter2.js        ← Óleo y Gouache (mancha + pinceladas con intención + variantes)
   watercolor2.js     ← Acuarela por aguadas superpuestas
   painter.js         ← acabado (relieve, brillo, lienzo) y motor 1.1 de respaldo
+  xilografia.js      ← cortes de gubia, estampación y planchas de color
+  rotuladores.js     ← bandas de rotulador, vetas, solapes y línea de fineliner
+  mixta.js           ← mixta lápiz + gouache y mixta completa (collage, impresión)
+  kit.js             ← texturas repetibles, manchas, composición y grano del papel
   pencil.js          ← Lápiz
   watercolor.js      ← Acuarela
   paper.js           ← papel y lienzo
@@ -178,7 +200,8 @@ engine/              ← código fuente del motor (módulos)
   techniques.js      ← técnicas, parámetros por defecto y presets
 tools/
   bundle.js          ← engine/*.js → plugin/js/engine.js
-  extract_strokes.py ← TEXTURES/PINCELADAS/* → plugin/textures/<técnica>.bin (+ hojas de contacto)
+  build_assets.py    ← TEXTURES/* → plugin/textures/*.bin (pinceladas, manchas, texturas)
+  extract_strokes.py ← extractor de pinceladas (lo usa build_assets.py)
   extract_papers.py  ← fondos de TEXTURES → plugin/textures/soporte-*.bin
   package.sh         ← genera dist/*.ccx y dist/*.zip
   run.js             ← prueba el motor en Node con una imagen
@@ -194,10 +217,10 @@ dist/                ← paquete .ccx listo para instalar
 ```
 
 ### Desarrollo
-Para regenerar los trazos tras añadir imágenes a `TEXTURES/PINCELADAS/` (requiere Python 3 con numpy,
-scipy y Pillow):
+Para regenerar todas las bibliotecas tras añadir material a `TEXTURES/` (requiere Python 3 con
+numpy, scipy y Pillow; tarda unos 5 minutos):
 ```bash
-python3 tools/extract_strokes.py
+python3 tools/build_assets.py
 ```
 ```bash
 python3 tools/extract_papers.py

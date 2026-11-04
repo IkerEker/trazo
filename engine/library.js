@@ -30,10 +30,19 @@ function parse(buffer) {
       const S = m.channels === 2 ? u8.subarray(base + m.offset + size, base + m.offset + 2 * size) : null;
       return {
         w: m.w, h: m.h, top: m.top, head: m.head, tail: m.tail, bottom: m.bottom,
-        fill: m.fill, aspect: m.aspect, A, S, mips: null,
+        fill: m.fill, aspect: m.aspect, q: m.q || 1, A, S, mips: null,
       };
     });
     return { kind: "strokes", technique: header.technique, samples };
+  }
+  if (header.items) {
+    // texturas repetibles, sellos (manchas) y texturas 9:16: varios planos uint8 por elemento
+    const items = header.items.map((m) => {
+      const it = Object.assign({}, m);
+      it.planes = m.planes.map((pl) => ({ w: pl.w, h: pl.h, data: u8.subarray(base + pl.offset, base + pl.offset + pl.w * pl.h) }));
+      return it;
+    });
+    return { kind: header.kind, items };
   }
   return { kind: "paper", paperKind: header.kind, w: header.w, h: header.h, data: u8.subarray(base, base + header.w * header.h) };
 }
@@ -245,4 +254,14 @@ function synthetic(kind) {
   return out;
 }
 
-module.exports = { synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };
+/** Elige un elemento al azar con peso (por defecto, la calidad q). */
+function pick(arr, rand, wfn) {
+  if (!arr || !arr.length) return null;
+  let tot = 0;
+  for (let i = 0; i < arr.length; i++) tot += wfn ? wfn(arr[i]) : (arr[i].q || 1);
+  let t = rand() * tot;
+  for (let i = 0; i < arr.length; i++) { t -= wfn ? wfn(arr[i]) : (arr[i].q || 1); if (t <= 0) return arr[i]; }
+  return arr[arr.length - 1];
+}
+
+module.exports = { pick, synthetic, parse, prepare, sampleAt, rowAt, mip, preparePaper, paperSampler, paperScale };

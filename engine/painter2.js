@@ -16,6 +16,7 @@ const C = require("./core.js");
 const S = require("./strokes.js");
 const Lib = require("./library.js");
 const Seg = require("./segment.js");
+const K = require("./kit.js");
 
 const BODY = 0.7, VK = 0.9;
 
@@ -101,9 +102,27 @@ function setPath(path, xs, ys, n) {
   return sl;
 }
 
+/** Ajustes de cada variante sobre la configuración base. */
+function applyMode(cfg, kind, p) {
+  const m = p.modo;
+  Object.assign(cfg, { imprim: 0, brushLines: 0, tileAmt: 0.45, stamps: 0.6, lechoso: 0, steps: 0, earth: 0, satK: 1, gapW: 0, darkBg: 0, splat: 0, shift: 0 });
+  if (kind === "oleo") {
+    if (m === "planos") Object.assign(cfg, { imprim: 0.2, tileAmt: 0.55, stamps: 0.8, brushLines: 0.15 });
+    if (m === "gestual") Object.assign(cfg, { imprim: 0.45, Rb: cfg.Rb * 1.3, Lk: cfg.Lk * 1.5, kappa: 0.75, tileAmt: 0.6, stamps: 1.0, dual: 0.85, satK: 1.18, brushLines: 0.35, softK: 0.6 });
+    if (m === "boceto") Object.assign(cfg, { imprim: 0.9, thick: cfg.thick * 0.35, kappa: 0.55, scrub: 0.65, scrubN: 2.6, tileAmt: 0.3, stamps: 0.3, brushLines: 1.0, accent: 0.6 });
+    if (m === "materico") Object.assign(cfg, { imprim: 0.25, earth: 0.65, tileAmt: 0.9, stamps: 1.2, brushLines: 0.75, gloss: 0.12, satK: 0.85 });
+  } else if (kind === "gouache") {
+    if (m === "pleinair") Object.assign(cfg, { steps: 5, lechoso: 0.14, tileAmt: 0.35, stamps: 0.5 });
+    if (m === "lineaplano") Object.assign(cfg, { steps: 4, lechoso: 0.18, kappa: 0.25, scrub: 0.2, tileAmt: 0.2, stamps: 0.2, gapW: 2.2, shift: 0.5, brushLines: 0.85 });
+    if (m === "expresivo") Object.assign(cfg, { lechoso: 0.08, darkBg: 0.75, splat: 1, brushLines: 0.7, tileAmt: 0.45, stamps: 0.8, satK: 1.15 });
+    if (m === "diluido") Object.assign(cfg, { lechoso: 0.1, softK: 1.2, op: cfg.op * 0.8, wobble: 0.5, kappa: 0.4, tileAmt: 0.3, stamps: 0.4 });
+  }
+  return cfg;
+}
+
 async function paint(ctx, kind, p, seg, Lfull, clock) {
   const { W, H, N, s } = ctx;
-  const cfg = config(kind, p, s);
+  const cfg = applyMode(config(kind, p, s), kind, p);
   const rand = C.mulberry32(ctx.seed * 31 + 7);
   const reg = seg.reg;
   const Pr = new Float32Array(N), Pg = new Float32Array(N), Pb = new Float32Array(N);
@@ -123,11 +142,66 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
     C.varyColor(0.5, 0.5, 0.5, (rand() - 0.5) * varH * 0.6, 0, (rand() - 0.5) * varL * 0.5, col);
     tint[r * 3] = col[0] - 0.5; tint[r * 3 + 1] = col[1] - 0.5; tint[r * 3 + 2] = col[2] - 0.5;
   }
+  // fondo oscuro del retrato expresivo: las zonas poco importantes y oscuras se hunden
+  const lumSorted = Array.from(reg.lum).sort((a, b) => a - b);
+  const lumMed = lumSorted[(lumSorted.length / 2) | 0] || 0.5;
+  const sink = new Float32Array(reg.n);
+  if (cfg.darkBg) for (let r = 0; r < reg.n; r++) sink[r] = reg.imp[r] < 0.45 && reg.lum[r] < lumMed + 0.1 ? cfg.darkBg : 0;
   const regionColor = (r, x, y, out) => {
     Seg.modelColor(seg, r, (x + 0.5) / W, (y + 0.5) / H, out);
     out[0] = C.clamp(out[0] + tint[r * 3], 0, 1); out[1] = C.clamp(out[1] + tint[r * 3 + 1], 0, 1); out[2] = C.clamp(out[2] + tint[r * 3 + 2], 0, 1);
+    if (cfg.steps) {   // valores escalonados: el gouache se pinta por planos de valor
+      const l = 0.299 * out[0] + 0.587 * out[1] + 0.114 * out[2];
+      const q = Math.round(reg.lum[r] * cfg.steps) / cfg.steps, k = (q + 0.03) / Math.max(0.03, reg.lum[r] + 0.03);
+      const l2 = l * (0.35 + 0.65 * k);
+      for (let c = 0; c < 3; c++) out[c] = C.clamp(out[c] * (l2 / Math.max(0.02, l)), 0, 1);
+    }
+    if (cfg.earth) {   // paleta de tierras
+      const l = 0.299 * out[0] + 0.587 * out[1] + 0.114 * out[2];
+      const er = l * 1.18 + 0.03, eg = l * 0.98, eb = l * 0.72;
+      out[0] = C.clamp(out[0] + (er - out[0]) * cfg.earth, 0, 1); out[1] = C.clamp(out[1] + (eg - out[1]) * cfg.earth, 0, 1); out[2] = C.clamp(out[2] + (eb - out[2]) * cfg.earth, 0, 1);
+    }
+    if (cfg.satK !== 1) { const l = 0.299 * out[0] + 0.587 * out[1] + 0.114 * out[2]; for (let c = 0; c < 3; c++) out[c] = C.clamp(l + (out[c] - l) * cfg.satK, 0, 1); }
+    if (cfg.lechoso) { const l = 0.299 * out[0] + 0.587 * out[1] + 0.114 * out[2]; for (let c = 0; c < 3; c++) out[c] = C.clamp((l + (out[c] - l) * 0.85) * (1 - cfg.lechoso) + 0.97 * cfg.lechoso, 0, 1); }
+    if (sink[r]) { const k = 1 - sink[r]; out[0] = out[0] * k * 0.9; out[1] = out[1] * k * 0.85; out[2] = out[2] * k * 0.95; }
     return out;
   };
+  // textura repetible de pincelada por zona (cálida o fría según su color, girada con la forma)
+  const tlib = ctx.assets && ctx.assets.tiles_pintura;
+  const tsamp = new Array(reg.n).fill(null);
+  const cch = new Float32Array(2);
+  const tileFor = (r) => {
+    if (!tlib || !cfg.tileAmt) return null;
+    if (tsamp[r]) return tsamp[r];
+    const wm = K.warmth(reg.mean[r * 3], reg.mean[r * 3 + 1], reg.mean[r * 3 + 2]);
+    const tags = kind === "oleo" && reg.lum[r] > 0.55 ? ["brochazo", "pincelada"] : ["pincelada", "brochazo"];
+    const it = K.pickTile(tlib, rand, tags, wm);
+    const th = 0.5 * Math.atan2(reg.os[r], reg.oc[r]) - (it.ang || 0) + Math.PI / 2;
+    tsamp[r] = K.tileSampler(it, K.tileScale(it, Math.max(W, H)), th, rand() * 999, rand() * 999);
+    return tsamp[r];
+  };
+  const texture = (r, x, y, out, amt) => {
+    const t = tileFor(r);
+    if (!t) return 0;
+    const l = t.l(x, y);
+    const k = 1 + amt * 0.13 * l;
+    out[0] *= k; out[1] *= k; out[2] *= k;
+    if (t.prep.cr) {
+      t.c(x, y, cch);
+      const kc = amt * 0.6;
+      out[0] += cch[0] * kc; out[2] += cch[1] * kc; out[1] -= (0.299 * cch[0] + 0.114 * cch[1]) / 0.587 * kc;
+    }
+    out[0] = C.clamp(out[0], 0, 1); out[1] = C.clamp(out[1], 0, 1); out[2] = C.clamp(out[2], 0, 1);
+    return l;
+  };
+  // imprimatura: fondo de color cálido que asoma en lo fino y entre pinceladas
+  const imp = new Float32Array(3);
+  if (cfg.imprim) {
+    let mr = 0, mg = 0, mb = 0;
+    for (let r = 0; r < reg.n; r++) { mr += reg.mean[r * 3] * reg.cnt[r]; mg += reg.mean[r * 3 + 1] * reg.cnt[r]; mb += reg.mean[r * 3 + 2] * reg.cnt[r]; }
+    const tot = seg.aw * seg.ah;
+    imp[0] = 0.55 * 0.62 + 0.45 * mr / tot * 0.8; imp[1] = 0.55 * 0.38 + 0.45 * mg / tot * 0.7; imp[2] = 0.55 * 0.24 + 0.45 * mb / tot * 0.55;
+  }
 
   /* ---------- 1) MANCHA ---------- */
   const gw = Math.max(4, Math.ceil(W / 48)), gh = Math.max(4, Math.ceil(H / 48));
@@ -143,10 +217,27 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
       // bordes orgánicos: la etiqueta se consulta en un punto ligeramente desplazado
       const ox = (C.bilinear(nX, gw, gh, x / 48, y / 48) - 0.5) * 2 * wob;
       const oy = (C.bilinear(nY, gw, gh, x / 48, y / 48) - 0.5) * 2 * wob;
-      const sx = C.clamp((x + ox) | 0, 0, W - 1), sy = C.clamp((y + oy) | 0, 0, H - 1);
+      const shx = cfg.shift * cfg.Rb, shy = cfg.shift * cfg.Rb * 0.6;
+      const sx = C.clamp((x + ox - shx) | 0, 0, W - 1), sy = C.clamp((y + oy - shy) | 0, 0, H - 1);
       const r = Lfull[sy * W + sx];
       regionColor(r, x, y, col);
+      const tl0 = texture(r, x, y, col, cfg.tileAmt);
       let a = m;
+      if (cfg.gapW) {   // filo de papel entre planos (línea y plano)
+        const e = ctx.at(ctx.edgeRaw, sx, sy);
+        if (e > 0.32) {
+          const d = ctx.at(seg.dt, sx, sy) * fa;
+          a *= C.smoothstep(cfg.gapW * s * 0.4, cfg.gapW * s * 1.2, d + (C.hash2(x >> 2, y >> 2, 3) - 0.5) * cfg.gapW * s);
+        }
+      }
+      if (cfg.imprim) {
+        // la mancha cubre las luces; en las sombras y las zonas finas asoma la imprimatura
+        const lum = reg.lum[r];
+        const cov = 1 - cfg.imprim * (1 - C.smoothstep(0.3, 0.78, lum)) * (0.75 + 0.5 * (C.bilinear(nX, gw, gh, x / 48 + 31, y / 48) - 0.5));
+        const am = a * C.clamp(cov, 0, 1);
+        col[0] = imp[0] * (1 - am) + col[0] * am; col[1] = imp[1] * (1 - am) + col[1] * am; col[2] = imp[2] * (1 - am) + col[2] * am;
+      }
+      if (tl0) Hh[i] += cfg.tileAmt * 0.05 * tl0 * cfg.thick * (0.2 + reg.lum[r]);
       if (kind === "ceras") {
         // cera de canto: el pigmento se queda en los picos del papel
         const dark = 1 - (0.299 * col[0] + 0.587 * col[1] + 0.114 * col[2]);
@@ -155,7 +246,7 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
         a *= 0.5 + 0.5 * C.smoothstep(1 - pr - 0.3, 1 - pr + 0.15, gr);
       }
       Pr[i] = col[0] * a; Pg[i] = col[1] * a; Pb[i] = col[2] * a; Cv[i] = a;
-      Hh[i] = cfg.mancha * a;
+      Hh[i] += cfg.mancha * a;
     }
     if ((y & 31) === 0) await clock.tick(0.12 * y / H);
   }
@@ -190,7 +281,7 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
     for (let i = 0; i < n; i++) path.rs[i] = Rq;
     const nt = raster.rasterize(path, 0.04);
     if (nt === 0) return;
-    const st = Lib.prepare(lib[(rand() * lib.length) | 0], path.len, Rr, rand, VK);
+    const st = Lib.prepare(Lib.pick(lib, rand), path.len, Rr, rand, VK);
     const cr = c[0], cg = c[1], cb = c[2];
     const mixAmt = Math.min(0.9, cfg.dual * (0.4 + p.varLuz + p.varTono * 0.6) * (0.4 + 0.6 * rand()));
     C.varyColor(cr, cg, cb, (rand() - 0.5) * 0.4 * (0.3 + p.varTono), (rand() - 0.5) * 0.4, (rand() < 0.5 ? -1 : 1) * (0.05 + 0.1 * rand()), col2);
@@ -221,7 +312,7 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
       if (darken) { br *= darken; bgc *= darken; bbc *= darken; }
       let rr, gg, bb;
       if (sv < 0) { const f = 1 + (sv < -0.9 ? -0.9 : sv); rr = br * f; gg = bgc * f; bb = bbc * f; }
-      else { const f = sv > 1 ? 0.85 : sv * 0.85; rr = br + (1 - br) * f; gg = bgc + (1 - bgc) * f; bb = bbc + (1 - bbc) * f; }
+      else { const f = (sv > 1 ? 0.85 : sv * 0.85) * (0.2 + 0.8 * (0.299 * br + 0.587 * bgc + 0.114 * bbc)); rr = br + (1 - br) * f; gg = bgc + (1 - bgc) * f; bb = bbc + (1 - bbc) * f; }
       const cv = Cv[g];
       if (wet > 0 && cv > 0.05) {
         const mm = wet * (0.15 + 0.85 * (u < 0 ? 0 : u > 1 ? 1 : u)) * cv, inv = 1 / cv;
@@ -286,6 +377,44 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
     }
   }
 
+  /* ---------- 2b) MANCHAS REALES superpuestas en las zonas amplias ---------- */
+  const stLib = ctx.assets && ctx.assets.manchas && ctx.assets.manchas.items;
+  if (stLib && cfg.stamps > 0) {
+    const big = stLib.filter((it) => /parche|relleno|remolino/.test(it.tags[0]));
+    const toq = stLib.filter((it) => /toques|veta/.test(it.tags[0]));
+    for (let oi = 0; oi < order.length; oi++) {
+      const r = order[oi];
+      const area = reg.cnt[r] * fa * fa;
+      if (area < 40 * cfg.Rb * cfg.Rb) continue;
+      const nS = Math.min(6, Math.floor(cfg.stamps * area / (cfg.Rb * cfg.Rb * 220) + rand() * 0.9));
+      const dir = 0.5 * Math.atan2(reg.os[r], reg.oc[r]);
+      for (let k = 0; k < nS; k++) {
+        if (!seedFor(r, cfg.Rb)) continue;
+        const pool = rand() < 0.7 && big.length ? big : toq.length ? toq : big;
+        const it = pool[(rand() * pool.length) | 0];
+        const size = Math.min(Math.sqrt(area) * (0.6 + 0.5 * rand()), reg.maxDist[r] * fa * 3.2);
+        if (size < cfg.Rb * 2) continue;
+        const ang = dir - (it.ang || 0) + (rand() - 0.5) * 0.4;
+        regionColor(r, seed[0], seed[1], col);
+        C.varyColor(col[0], col[1], col[2], (rand() - 0.5) * varH * cfg.varK, (rand() - 0.5) * varS * cfg.varK, (rand() - 0.5) * varL * cfg.varK, col);
+        const cr = col[0], cg = col[1], cb = col[2];
+        const thickR = cfg.thick * (0.15 + 0.85 * Math.pow(reg.lum[r], 1.5));
+        K.drawStamp(it, seed[0], seed[1], size, ang, W, H, (i, av, sv) => {
+          if (Lfull[i] !== r) return;
+          const a2 = C.smoothstep(0.1, 0.7, av) * cfg.op * 0.6;
+          const sk = sv * cfg.sK * 0.35 * C.smoothstep(0.5, 0.9, av);
+          let rr = cr, gg = cg, bb = cb;
+          if (sk < 0) { const f = 1 + Math.max(-0.35, sk * 0.5); rr *= f; gg *= f; bb *= f; } else { const f = Math.min(0.2, sk * 0.3); rr += (1 - rr) * f; gg += (1 - gg) * f; bb += (1 - bb) * f; }
+          const ia = 1 - a2;
+          Pr[i] = Pr[i] * ia + rr * a2; Pg[i] = Pg[i] * ia + gg * a2; Pb[i] = Pb[i] * ia + bb * a2;
+          Cv[i] = Cv[i] * ia + a2;
+          Hh[i] = Hh[i] * (1 - a2 * 0.8) + a2 * thickR * (0.45 + 0.4 * sv);
+        });
+      }
+      if ((oi & 15) === 0) await clock.tick(0.3);
+    }
+  }
+
   /* ---------- 3) MODELADO ---------- */
   for (let oi = 0; oi < order.length; oi++) {
     const r = order[oi];
@@ -330,6 +459,10 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
     const r = ch.r, q = ch.q;
     const d0 = lab[r * 3] - lab[q * 3], d1 = lab[r * 3 + 1] - lab[q * 3 + 1], d2 = lab[r * 3 + 2] - lab[q * 3 + 2];
     const contrast = Math.min(1, Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2) / 45);
+    // fuerza del borde real de la foto a lo largo de la cadena (no los bordes de la segmentación)
+    let edgeStr = 0;
+    for (let k = 0; k < ch.n; k += 2) edgeStr += ctx.edgeRaw[Math.min(seg.ah - 1, ch.ys[k] | 0) * seg.aw + Math.min(seg.aw - 1, ch.xs[k] | 0)];
+    edgeStr /= Math.max(1, Math.ceil(ch.n / 2));
     const imp = reg.imp[r];
     const pDraw = C.clamp(0.15 + contrast * 1.1 + imp * 0.3 - 0.25 * (1 - p.detalle), 0, 1);
     if (rand() > pDraw) continue;
@@ -375,6 +508,14 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
       if (!found) { regionColor(q, mx, my, col2); col[0] = (col[0] + col2[0]) / 2; col[1] = (col[1] + col2[1]) / 2; col[2] = (col[2] + col2[2]) / 2; }
       const thickE = cfg.thick * (0.1 + 0.6 * Math.pow(reg.lum[r], 1.6));
       renderStroke(found ? Re : Re * 1.3, col, (found ? cfg.edgeOp : 0.5) * cfg.op, thickE, found ? 0.8 : 0.5, found ? 0.5 : 1.5, 0);
+      if (cfg.brushLines && contrast > 0.3 && edgeStr > 0.3 && ch.n > 12 && rand() < cfg.brushLines * 0.75) {
+        // dibujo a pincel: línea fina y oscura (siena, azul) que cierra la forma
+        const dr = reg.lum[r] < reg.lum[q] ? r : q;
+        regionColor(dr, mx, my, col2);
+        const lc = [col2[0] * 0.35 + 0.1, col2[1] * 0.27 + 0.05, col2[2] * 0.3 + 0.04];
+        if (kind === "gouache") { lc[0] = Math.min(1, col2[0] * 0.6 + 0.3); lc[1] = col2[1] * 0.4; lc[2] = col2[2] * 0.35; }
+        renderStroke(Math.max(0.6, Re * 0.3), lc, 0.92 * cfg.op, cfg.thick * 0.08, 0.35, 0.25, 0);
+      }
     }
     if ((ci & 31) === 0) await clock.tick(0.72 + 0.12 * ci / chains.length);
   }
@@ -399,6 +540,29 @@ async function paint(ctx, kind, p, seg, Lfull, clock) {
         regionColor(r, seed[0], seed[1], col);
         C.varyColor(col[0], col[1], col[2], 0, 0.05, 0.07, col);
         renderStroke(R, col, cfg.op, cfg.thick * 1.35, 1.1, 0.4, 0);
+      }
+    }
+  }
+  /* ---------- 6) SALPICADURAS (retrato expresivo) ---------- */
+  if (cfg.splat) {
+    const nSp = Math.round(W * H / (6000 * s * s) * cfg.splat);
+    for (let k = 0; k < nSp; k++) {
+      let r = (rand() * reg.n) | 0;
+      for (let t = 0; t < 4 && reg.imp[r] < 0.45; t++) r = (rand() * reg.n) | 0;
+      seedIn(r, seed);
+      const rr = (0.7 + 3.2 * Math.pow(rand(), 3)) * s;
+      const light = rand() < 0.6;
+      regionColor(r, seed[0], seed[1], col);
+      const sc = light ? [0.96, 0.92, 0.84] : rand() < 0.5 ? [col[0] * 0.35, col[1] * 0.3, col[2] * 0.45 + 0.1] : [0.2, 0.3, 0.7];
+      const x0 = Math.max(0, (seed[0] - rr - 2) | 0), x1 = Math.min(W - 1, (seed[0] + rr + 2) | 0);
+      const y0 = Math.max(0, (seed[1] - rr - 2) | 0), y1 = Math.min(H - 1, (seed[1] + rr + 2) | 0);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const d = Math.hypot(x - seed[0], (y - seed[1]) * 1.15);
+        const a2 = C.smoothstep(rr + 0.7, rr - 0.7, d) * 0.92;
+        if (a2 <= 0) continue;
+        const i = y * W + x, ia = 1 - a2;
+        Pr[i] = Pr[i] * ia + sc[0] * a2; Pg[i] = Pg[i] * ia + sc[1] * a2; Pb[i] = Pb[i] * ia + sc[2] * a2; Cv[i] = Cv[i] * ia + a2;
+        Hh[i] += a2 * 0.15 * cfg.thick;
       }
     }
   }
