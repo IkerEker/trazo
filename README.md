@@ -16,11 +16,11 @@ el lienzo va en una capa aparte (casilla **Papel**).
 | Xilografía | Realista · Expresiva · Dos tintas · Tres tintas |
 
 Cada variante rellena todos los ajustes. Después se pueden tocar en **Ajustes**, donde también se
-puede cambiar de variante sin perder los valores. Al final de **Ajustes** hay dos controles que se
-mantienen al cambiar de variante:
+puede cambiar de variante sin perder los valores. En la primera pantalla (**Técnica**), justo debajo
+de las variantes, hay dos controles que se mantienen al cambiar de variante:
 - **Realismo**: cuanto más alto, más se parece a la fotografía (más capas, pincel final más fino,
   bordes más nítidos, menos simplificación); cuanto más bajo, más abstracto.
-- **Luz** (técnicas con empaste): intensidad de la luz rasante. Al mínimo no se ven los volúmenes
+- **Luz** (óleo, ceras y mixta; el gouache no tiene volumen): intensidad de la luz rasante. Al mínimo no se ven los volúmenes
   del empaste; al máximo se marcan mucho las crestas, los surcos y el brillo.
 
 **Pinta con material real.** Lo que hay en `TEXTURES/` se convierte en las bibliotecas de
@@ -128,11 +128,11 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 | Técnica | 5 MP (3000×1688) |
 |---|---|
 | Óleo | 9,0 s |
-| Lápiz | 7,5 s |
-| Gouache | 9,8 s |
-| Acuarela | 7,8 s |
-| Ceras | 12,4 s |
-| Mixta L+G | 12,7 s |
+| Lápiz | 4,3 s |
+| Gouache | 9,5 s (Diluido 13,3 s) |
+| Acuarela | 7,8 s (Con dibujo 8,8 s) |
+| Ceras | 11,6 s |
+| Mixta L+G | 10,5 s |
 | Xilografía | 3,3 s |
 
 La vista previa del panel tarda alrededor de 1 s. A 6 MP el motor usa unos 300–450 MB de
@@ -188,8 +188,12 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      oscuros finos**; el **brillo** es propio de cada trazo y solo aparece en las crestas (con Luz
      baja, aspecto de foto de museo sin destellos); la pasta proyecta **sombras cortas**; entre
      pinceladas asoma la **imprimatura** cálida; y un **último pase de pinceladas anchas** fuera del
-     foco, como hacían Sargent o Sorolla. El gouache seca **mate con los valores comprimidos** y los
-     tintes claros algo calcáreos.
+     foco, como hacían Sargent o Sorolla.
+   - **Gouache sin volumen**: solo sus propios trazos (`TEXTURES/TRAZOS/GUACHE` y las pinceladas grises
+     sueltas → `pin_guache.bin`), planos y mates, con la variación de tono interna de cada trazo
+     real y sin relieve ni brillo. Seca con los valores comprimidos y los tintes claros algo
+     calcáreos. **Diluido** es una mezcla: manchas húmedas de acuarela de base y, encima, pinceladas
+     de gouache sueltas (más en lo importante) que dejan ver la aguada.
    - **Escala física**: cada técnica supone un original de tamaño real (óleo 60 cm, acuarela 38 cm,
      dibujo 30 cm…), así la trama y el grano tienen la escala correcta.
    - **Espátula** (óleo, planos y espátula): planos de pasta de borde recto, con dos colores
@@ -199,12 +203,22 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      usan una caja de colores limitada sacada de la imagen y se mezclan por capas rayadas a mano; el
      diente del papel se va llenando con cada pasada (las capas siguientes llegan a valles más hondos);
      el pastel seco se difumina con el dedo en zonas y va sobre papel de color; el óleo en barra
-     y el pastel graso son cubrientes, con relieve y arrastre de color.
-4. **Lápiz**: el grafito nunca llega al negro y brilla donde está muy cargado; el carboncillo da
-   un negro mate y profundo. La presión cambia a lo largo de cada línea. Difumino en las zonas lisas y rayado con una dirección coherente en cada zona
-   (sigue la forma o va en diagonal de mano). El sombreado se hace con trazos reales de grafito y carbón (los más ligeros en
-   las primeras pasadas) y se acumula hasta igualar el tono de la foto. Encima van contornos
-   finos sobre el diente del papel real.
+     y el pastel graso son cubrientes, con arrastre de color. Todas usan los trazos reales de
+     `TEXTURES/TRAZOS/CERAS` (Manley también los de cera escolar) con su variación de tono interna,
+     **planos**: solo ~1 % de los trazos lleva pasta, y nunca en las zonas importantes.
+4. **Lápiz** (`sketch.js`), boceto a lápiz según Lu, Xu y Jia (NPAR 2012):
+   - **Líneas**: cada punto de borde de la foto (simplificada sin perder los bordes) se dibuja como
+     un segmento a lo largo del borde. Al acumularse salen líneas de dibujante, más oscuras donde el
+     borde es más fuerte, que se pasan un poco en las puntas y se cruzan en las esquinas.
+   - **Tono**: el histograma de la foto se ajusta al de un dibujo a lápiz real (mucho papel blanco,
+     medios tonos amplios y pocos oscuros; cada variante con su reparto).
+   - **Rayado**: el tono se dibuja con una textura de rayado hecha con trazos reales de grafito
+     (`pin_lapiz`; el carboncillo con barras de carbón y difuminado). Las zonas oscuras son la misma
+     textura con más pasadas (T = H^β) y en las sombras se cruza un segundo rayado. Con curvatura,
+     cada plano con dirección clara se raya en su dirección.
+   - **Papel**: el grafito se queda en los picos del grano; nunca llega al negro y brilla donde está
+     muy cargado. El carboncillo da un negro mate. La mixta lápiz + gouache y la acuarela con dibujo
+     usan este mismo lápiz.
 5. **Acuarela** (`watercolor2.js`): de dos a cuatro aguadas según lo oscura que sea cada
    mancha. Las primeras, húmedas, tienen bordes suaves, flecos y floraciones, y sus colores
    se funden en los bordes. Las últimas, en seco, tienen bordes nítidos. Al secar, el
@@ -254,7 +268,7 @@ engine/              ← código fuente del motor (módulos)
   xilografia.js      ← cortes de gubia, estampación y planchas de color
   mixta.js           ← mixta lápiz + gouache
   kit.js             ← texturas repetibles, manchas, paleta, composición y grano del papel
-  pencil.js          ← Lápiz
+  sketch.js          ← Lápiz (líneas + tono + rayado real, Lu et al. 2012)
   watercolor.js      ← Acuarela
   paper.js           ← papel y lienzo
   library.js         ← carga de trazos y soportes reales, mapeo sobre recorridos, mipmaps

@@ -48,7 +48,7 @@ const TECHNIQUES = [
   },
   {
     id: "gouache", name: "Gouache", desc: "Planos mates y opacos con borde duro",
-    params: PAINT,
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "varTono", "varSat", "varLuz", "detalle", "realismo"],
     variants: [
       { id: "pleinair", name: "Plein air", values: { intensidad: 92, grosor: 48, longitud: 32, curvatura: 45, cobertura: 95, empaste: 18, varTono: 14, varSat: 14, varLuz: 18, detalle: 50 } },
       { id: "planos", name: "Planos opacos", values: { intensidad: 95, grosor: 50, longitud: 35, curvatura: 35, cobertura: 100, empaste: 10, varTono: 8, varSat: 8, varLuz: 10, detalle: 55 } },

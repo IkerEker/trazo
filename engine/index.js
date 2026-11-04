@@ -20,7 +20,7 @@ const C = require("./core.js");
 const { Context } = require("./analysis.js");
 const T = require("./techniques.js");
 const Painter = require("./painter.js");
-const Pencil = require("./pencil.js");
+const Pencil = require("./sketch.js");
 const Paper = require("./paper.js");
 const Lib = require("./library.js");
 const Seg = require("./segment.js");
@@ -36,11 +36,11 @@ const SUPPORT_FOR = {
 };
 const ASSETS_FOR = {
   oleo: ["pin_oleo", "pin_gouache", "manchas", "tiles_pintura"],
-  gouache: ["pin_gouache", "manchas", "tiles_pintura"],
+  gouache: ["pin_guache", "manchas", "tiles_pintura", "pin_acuarela", "tiles_acuarela"],
   acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz", "ov_goteos"],
   lapiz: ["pin_lapiz", "pin_cera", "ov_grafito", "ov_carbon"],
   ceras: ["pin_barra", "pin_manley", "pin_pastel"],
-  mixtalg: ["pin_lapiz", "pin_gouache", "manchas"],
+  mixtalg: ["pin_lapiz", "pin_guache", "manchas"],
   xilografia: ["ov_madera", "ov_impresion"],
 };
 // cómo se marca el papel en lo velado
@@ -79,7 +79,7 @@ async function render(input, opts, hooks) {
   ctx.paperPrep = opts.support ? Lib.preparePaper(opts.support) : null;
   ctx.physMM = Lib.physMM(tech); // escala física del soporte (trama, grano)
   // biblioteca de pinceladas principal de la técnica
-  const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_gouache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], ceras: ["pin_manley"], mixtalg: ["pin_gouache"], xilografia: [] }[tech];
+  const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_guache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], ceras: ["pin_barra"], mixtalg: ["pin_guache"], xilografia: [] }[tech];
   ctx.lib = strokesOf(assets, mainLib) || (opts.library && opts.library.kind === "strokes" ? opts.library : null);
 
   clock.stage(0, 0.05, "Analizando la imagen");
@@ -96,7 +96,8 @@ async function render(input, opts, hooks) {
   clock.stage(0.11, 0.2, "Viendo la imagen en manchas");
   const seg = await Seg.segment(ctx, { detail }, clock);
   // etiquetas a resolución completa (el pintor por capas no las necesita)
-  const Lfull = tech === "oleo" || tech === "gouache" || tech === "ceras" ? null : (clock.stage(0.2, 0.25, "Ajustando los bordes"), await Seg.fullLabels(ctx, seg, clock));
+  const diluido = tech === "gouache" && p.modo === "diluido";
+  const Lfull = (tech === "oleo" || tech === "gouache" || tech === "ceras") && !diluido ? null : (clock.stage(0.2, 0.25, "Ajustando los bordes"), await Seg.fullLabels(ctx, seg, clock));
   const end = opts.paper ? 0.88 : 0.95;
 
   let paint;
@@ -120,6 +121,19 @@ async function render(input, opts, hooks) {
   } else if (tech === "mixtalg") {
     clock.stage(0.25, end, "Lápiz y gouache");
     paint = await Mixta.paintLG(ctx, p, seg, Lfull, clock);
+  } else if (diluido) {
+    // gouache diluido: manchas húmedas de acuarela debajo y pinceladas de gouache encima
+    clock.stage(0.25, 0.55, "Aguadas húmedas");
+    const libSave = ctx.lib;
+    ctx.lib = strokesOf(assets, ["pin_acuarela"]);
+    const wc = await Water2.paint(ctx, Object.assign({}, p, { modo: "humeda", humedad: 0.85, granulado: 0.45, intensidad: 0.72, detalle: p.detalle * 0.7 }), seg, Lfull, clock);
+    ctx.lib = libSave;
+    clock.stage(0.55, 0.86, "Pinceladas de gouache");
+    const planes = await Painter3.paint(ctx, tech, p, seg, clock);
+    clock.stage(0.86, end, "Acabado");
+    const gl = await Painter.finish(ctx, tech, p, planes, clock);
+    K.overU8(wc, gl);
+    paint = wc;
   } else {
     clock.stage(0.2, 0.84, tech === "ceras" ? "Pintando con ceras" : "Pintando");
     const planes = await Painter3.paint(ctx, tech, p, seg, clock);

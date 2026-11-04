@@ -63,12 +63,17 @@ FAMILIES = {
                      os.path.join(TR, "Cinco trazos azules sobre*"), os.path.join(TR, "Tres trazos azules texturizados*")))],
     "pastel": [(2, g(os.path.join(TR, "Gemini_Generated_Image_4k0x*"), os.path.join(TR, "Garabato de carb*"),
                      ))],
+    # gouache plano (sin volumen): la carpeta GUACHE y las pinceladas grises sueltas
+    "guache": [(2, g(os.path.join(TR, "GUACHE", "*"),
+                     *[os.path.join(TR, f"Gemini_Generated_Image_{k}.jpg") for k in
+                       ("1m2vhi1m2vhi1m2v", "xw72ktxw72ktxw72", "i9od48i9od48i9od", "uoqx5fuoqx5fuoqx", "gtyi67gtyi67gtyi", "fooa8gfooa8gfooa")],
+                     os.path.join(TR, "Pincelada gris sobre blanco.png")))],
     "acuarela": [(1, g(os.path.join(TR, "AGUADAS", "*")))],
 }
-WIDTH = {"oleo": 112, "gouache": 96, "cera": 80, "lapiz": 56, "barra": 96, "manley": 72, "pastel": 96, "acuarela": 96}
-HMAXF = {"oleo": 720, "gouache": 720, "cera": 640, "lapiz": 640, "barra": 720, "manley": 720, "pastel": 640, "acuarela": 640}
-CAP = {"oleo": 30, "gouache": 30, "cera": 26, "lapiz": 30, "barra": 30, "manley": 30, "pastel": 30, "acuarela": 21}
-OPAQUE = {"oleo", "gouache", "cera", "barra", "manley", "pastel"}
+WIDTH = {"guache": 96, "oleo": 112, "gouache": 96, "cera": 80, "lapiz": 56, "barra": 96, "manley": 72, "pastel": 96, "acuarela": 96}
+HMAXF = {"guache": 720, "oleo": 720, "gouache": 720, "cera": 640, "lapiz": 640, "barra": 720, "manley": 720, "pastel": 640, "acuarela": 640}
+CAP = {"guache": 40, "oleo": 30, "gouache": 30, "cera": 26, "lapiz": 30, "barra": 30, "manley": 30, "pastel": 30, "acuarela": 21}
+OPAQUE = {"guache", "oleo", "gouache", "cera", "barra", "manley", "pastel"}
 
 
 def md5(f):

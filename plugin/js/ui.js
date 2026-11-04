@@ -27,8 +27,9 @@
     { title: "SUPERFICIE", keys: ["cobertura", "empaste", "humedad", "granulado", "cruzado"] },
     { title: "COLOR", keys: ["varTono", "varSat", "varLuz"], toggles: true },
     { title: "DETALLE", keys: ["detalle"] },
-    { title: "REALISMO Y LUZ", keys: ["realismo", "luz"] },
   ];
+  // en la primera pantalla (pestaña Técnica), justo debajo de las variantes
+  const QUICK = ["realismo", "luz"];
 
   /* ------------------------------------------------------------------ */
   /* estado                                                              */
@@ -290,6 +291,15 @@
       vrow.appendChild(c);
     }
     box.appendChild(vrow);
+    const qbox = $("quickSliders");
+    if (qbox) {
+      qbox.innerHTML = "";
+      const qk = QUICK.filter((k) => visible.has(k));
+      if (qk.length) {
+        qbox.appendChild(el("div", "section-title", qk.length > 1 ? "REALISMO Y LUZ" : "REALISMO"));
+        for (const k of qk) qbox.appendChild(buildSlider(k));
+      }
+    }
     for (const g of GROUPS) {
       const keys = g.keys.filter((k) => visible.has(k));
       const toggles = g.toggles ? (def.toggles || []) : [];

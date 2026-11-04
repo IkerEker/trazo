@@ -11,7 +11,7 @@ const S = require("./strokes.js");
 const Lib = require("./library.js");
 const Painter = require("./painter.js");
 const Painter3 = require("./painter3.js");
-const Pencil = require("./pencil.js");
+const Pencil = require("./sketch.js");
 const K = require("./kit.js");
 
 /* ---------- gouache completo (RGBA) ---------- */
@@ -44,7 +44,7 @@ async function paintLG(ctx, p, seg, Lfull, clock) {
   const pencilLib = ctx.strokesOf(["pin_lapiz"]);
 
   // 1) lápiz: rayado ligero y contornos
-  const base = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta", cobertura: 0.55 + 0.3 * (1 - p.cobertura) }), tick(0, 0.3), seg, Lfull, { lib: pencilLib, only: "tono" });
+  const base = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta", cobertura: 0.55 + 0.3 * (1 - p.cobertura) }), tick(0, 0.3), seg, Lfull, { only: "tono", toneMul: 0.75 });
   // 2) gouache
   // gouache de planos: menos capas finas (el detalle lo da el lápiz)
   const gou = await gouacheLayer(ctx, Object.assign({}, p, { grosor: p.grosor * 0.9, detalle: p.detalle * 0.35 }), seg, Lfull, tick(0.3, 0.7), "pleinair");
@@ -98,7 +98,7 @@ async function paintLG(ctx, p, seg, Lfull, clock) {
   // 3) composición: lápiz → gouache → líneas de lápiz encima (muy presentes)
   const out = base;
   K.overU8(out, gou);
-  const lines = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta" }), tick(0.75, 0.98), seg, Lfull, { lib: pencilLib, only: "contornos", contourMul: 0.8 + 0.35 * p.intensidad });
+  const lines = await Pencil.paint(ctx, Object.assign({}, p, { modo: "mixta" }), tick(0.75, 0.98), seg, Lfull, { only: "lineas", lineMul: 0.8 + 0.3 * p.intensidad });
   K.multU8(out, lines);
   return out;
 }
