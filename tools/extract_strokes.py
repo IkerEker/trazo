@@ -1,7 +1,7 @@
 """
 Trazo · extractor de trazos reales.
 
-Lee TEXTURES/<CARPETA>/*.jpg (9:16, fondo blanco, 3 trazos verticales que empiezan
+Lee TEXTURES/PINCELADAS/<CARPETA>/*.jpg (9:16, fondo blanco, 3 trazos verticales que empiezan
 arriba) y genera, por técnica, una biblioteca binaria plugin/textures/<tecnica>.bin
 con cada trazo enderezado y normalizado:
 
@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage as ndi
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-SRC = os.path.join(ROOT, "TEXTURES")
+SRC = os.path.join(ROOT, "TEXTURES", "PINCELADAS")
 OUT_LIB = os.path.join(ROOT, "plugin", "textures")
 OUT_DBG = os.path.join(ROOT, "tools", "out")
 

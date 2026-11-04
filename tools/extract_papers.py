@@ -1,7 +1,7 @@
 """
 Trazo · texturas de soporte reales (lienzo, papel de acuarela, papel de dibujo).
 
-Toma el fondo de las imágenes de TEXTURES (zonas sin trazos), corrige la luz y
+Toma el fondo de las imágenes de TEXTURES/PINCELADAS (zonas sin trazos), corrige la luz y
 sintetiza una textura de 512×512 que se repite sin costuras, con el mismo
 espectro que el papel real (síntesis de fase aleatoria). Para el lienzo, que
 es periódico, usa además un recorte real hecho repetible por desplazamiento

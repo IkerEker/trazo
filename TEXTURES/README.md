@@ -1,24 +1,23 @@
 # TEXTURES
 
-Aquí van las carpetas con las imágenes de trazos, una carpeta por técnica.
-Sube tus carpetas tal cual: **Add file › Upload files** y arrastra las carpetas enteras.
+Material real con el que pinta Trazo. Cada técnica tiene su carpeta con el mismo nombre en
+todas las secciones: `OLEO`, `GUACHE`, `AGUADAS` (acuarela), `CERAS` y `LAPIZ`.
 
-| Carpeta | Técnica en el plugin |
+| Carpeta | Qué va dentro |
 |---|---|
-| `AGUADAS` | Acuarela |
-| `GUACHE` | Gouache |
-| `LAPIZ` | Lápiz |
-| `OLEO` | Óleo |
-| `CERAS` | Ceras |
+| `PINCELADAS/` | Trazos sueltos: 9:16, fondo blanco, 3 trazos verticales que empiezan arriba (ya están) |
+| `MANCHAS/` | Una mancha por imagen, centrada sobre fondo blanco |
+| `TILEABLES/` | Texturas que se repiten sin costuras, para rellenar zonas |
+| `PAPEL/` | Papeles y lienzos de fondo, también repetibles sin costuras |
 
-## Formato de las imágenes
-- 9:16 en vertical, fondo blanco y trazos en gris.
-- Tres trazos por imagen, separados entre sí.
-- Verticales y **empezando arriba**.
-- No hace falta nombrarlas: la carpeta indica la técnica.
+Cada carpeta lleva un README con lo que necesito exactamente.
 
-## Qué hace el procesado
-1. Limpia el fondo y separa cada trazo, uniendo sus fragmentos y migas cercanas.
-2. Convierte el gris en cantidad de pintura (más oscuro = más carga).
-3. Calcula la línea central, la anchura y la dirección, y estima el relieve.
-4. Genera una hoja de contacto numerada para revisar qué trazos se quedan.
+## Cómo subirlas con GitHub Desktop
+1. Pulsa **Fetch origin** y después **Pull origin** (las pinceladas se han movido a `PINCELADAS/`).
+2. **Repository › Show in Explorer** y copia tus imágenes en la carpeta que corresponda.
+3. Escribe un resumen, pulsa **Commit to main** y después **Push origin**.
+
+## Formatos
+- PNG o JPG de máxima calidad, en RGB (no CMYK).
+- Mínimo 1024 px de lado; mejor 2048 px.
+- Los nombres son libres. La carpeta indica la técnica, y el contenido lo analizo yo.

@@ -178,19 +178,22 @@ engine/              ← código fuente del motor (módulos)
   techniques.js      ← técnicas, parámetros por defecto y presets
 tools/
   bundle.js          ← engine/*.js → plugin/js/engine.js
-  extract_strokes.py ← TEXTURES/*  → plugin/textures/<técnica>.bin (+ hojas de contacto)
+  extract_strokes.py ← TEXTURES/PINCELADAS/* → plugin/textures/<técnica>.bin (+ hojas de contacto)
   extract_papers.py  ← fondos de TEXTURES → plugin/textures/soporte-*.bin
   package.sh         ← genera dist/*.ccx y dist/*.zip
   run.js             ← prueba el motor en Node con una imagen
   serve.js + mock-photoshop.js ← el panel en el navegador con Photoshop simulado
   shots.js, flow_test.js       ← capturas a varios tamaños y prueba de interacción
-TEXTURES/            ← imágenes de trazos, una carpeta por técnica
-  AGUADAS/ GUACHE/ LAPIZ/ OLEO/ CERAS/
+TEXTURES/            ← material real, una carpeta por técnica en cada sección
+  PINCELADAS/        ← trazos sueltos (fuente de plugin/textures/<técnica>.bin)
+  MANCHAS/           ← manchas centradas sobre blanco
+  TILEABLES/         ← texturas repetibles para rellenar zonas
+  PAPEL/             ← papeles y lienzos de fondo
 dist/                ← paquete .ccx listo para instalar
 ```
 
 ### Desarrollo
-Para regenerar los trazos tras añadir imágenes a `TEXTURES/` (requiere Python 3 con numpy,
+Para regenerar los trazos tras añadir imágenes a `TEXTURES/PINCELADAS/` (requiere Python 3 con numpy,
 scipy y Pillow):
 ```bash
 python3 tools/extract_strokes.py
