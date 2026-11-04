@@ -16,7 +16,12 @@ el lienzo va en una capa aparte (casilla **Papel**).
 | Xilografía | Realista · Expresiva · Dos tintas · Tres tintas |
 
 Cada variante rellena todos los ajustes. Después se pueden tocar en **Ajustes**, donde también se
-puede cambiar de variante sin perder los valores.
+puede cambiar de variante sin perder los valores. Al final de **Ajustes** hay dos controles que se
+mantienen al cambiar de variante:
+- **Realismo**: cuanto más alto, más se parece a la fotografía (más capas, pincel final más fino,
+  bordes más nítidos, menos simplificación); cuanto más bajo, más abstracto.
+- **Luz** (técnicas con empaste): intensidad de la luz rasante. Al mínimo no se ven los volúmenes
+  del empaste; al máximo se marcan mucho las crestas, los surcos y el brillo.
 
 **Pinta con material real.** Lo que hay en `TEXTURES/` se convierte en las bibliotecas de
 `plugin/textures/` (`tools/build_assets.py`):
@@ -152,7 +157,8 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      de su lado, como cuando un pintor decide dónde acaba la forma. El pincel nunca coge colores
      intermedios, así que no hay halos ni perfiles alrededor de las formas.
    - **Encaje:** una capa fina de color con el borde roto y la textura de un frotado real
-     (`TEXTURAS REALISTAS TILEABLES`, cálida o fría según la zona y girada con la forma).
+     (`TEXTURAS REALISTAS TILEABLES`, cálida o fría según la zona y girada con la forma), que
+     también da el relieve de esa pintura frotada.
    - **Formas:** las zonas amplias de un mismo color se cubren con manchas reales de varios
      trazos (`MANCHAS GRANDES DE VARIOS TRAZOS`) de tamaños muy distintos, orientadas con la
      forma y sin invadir otros colores. Encima solo van algunas pinceladas.
@@ -169,11 +175,12 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      propio, que ondula a lo largo y se deshilacha con las cerdas. Los bordes quedan rotos,
      nunca redondeados ni con líneas oscuras.
    - Las pinceladas finas continúan la pintura que ya hay alrededor, sin costuras.
-   - Cada pincelada es un **trazo real** elegido con la proporción adecuada (no se estira).
+   - Cada pincelada es un **trazo real** elegido con la proporción y el tamaño de cerda
+     adecuados (no se estira ni se ven cerdas gigantes o borrosas).
      El pincel va cargado con dos tonos y varía la temperatura entre trazos (blancos cremosos o
      azulados). La mezcla húmeda solo se da entre colores parecidos, para no ensuciar los bordes.
      El relieve del empaste lo hace cada trazo: cuerpo, surcos de las cerdas y crestas en los
-     bordes (en el matérico, muy marcadas).
+     bordes (en el matérico, muy marcadas). Los surcos reciben menos luz (oclusión).
    - **Espátula** (óleo, planos y espátula): planos de pasta de borde recto, con dos colores
      arrastrados en vetas, raspados que dejan ver lo de debajo y crestas en los lados y al final.
    - **Ceras**: sin capa base. El color se queda en los picos del papel según la presión (más en

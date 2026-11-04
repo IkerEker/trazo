@@ -27,6 +27,7 @@
     { title: "SUPERFICIE", keys: ["cobertura", "empaste", "humedad", "granulado", "cruzado"] },
     { title: "COLOR", keys: ["varTono", "varSat", "varLuz"], toggles: true },
     { title: "DETALLE", keys: ["detalle"] },
+    { title: "REALISMO Y LUZ", keys: ["realismo", "luz"] },
   ];
 
   /* ------------------------------------------------------------------ */
@@ -210,7 +211,9 @@
   /* ------------------------------------------------------------------ */
   function applyValues(values, presetName) {
     const p = T.defaultsFor(state.tech);
-    Object.assign(p, values || {});
+    // realismo y luz se mantienen al cambiar de variante (los presets propios sí los guardan)
+    const keep = { realismo: cur().realismo, luz: cur().luz };
+    Object.assign(p, keep, values || {});
     state.params[state.tech] = p;
     state.activePreset[state.tech] = presetName || null;
     buildPresets();

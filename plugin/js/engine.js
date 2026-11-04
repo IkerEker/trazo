@@ -1,4 +1,4 @@
-/*! Trazo 1.6.0 · motor de pintura (generado por tools/bundle.js, no editar) */
+/*! Trazo 1.7.0 · motor de pintura (generado por tools/bundle.js, no editar) */
 (function (root) {
 "use strict";
 const __defs = {}, __cache = {};
@@ -775,7 +775,9 @@ async function render(input, opts, hooks) {
   ctx.buildCoverage(p.cobertura, { lumWeight: tech === "acuarela" ? 0.7 : tech === "lapiz" || tech === "ceras" ? 0.45 : 0.55 });
 
   const [d0, d1] = DETAIL[tech];
-  const detail = tech === "xilografia" && p.modo === "expresiva" ? 0.12 + 0.3 * p.detalle : d0 + d1 * p.detalle;
+  let detail = tech === "xilografia" && p.modo === "expresiva" ? 0.12 + 0.3 * p.detalle : d0 + d1 * p.detalle;
+  // realismo: más alto = la imagen se divide en más manchas (más parecido a la foto)
+  detail = Math.max(0.05, Math.min(1.15, detail * (0.5 + p.realismo)));
   clock.stage(0.11, 0.2, "Viendo la imagen en manchas");
   const seg = await Seg.segment(ctx, { detail }, clock);
   // etiquetas a resolución completa (el pintor por capas no las necesita)
@@ -1957,8 +1959,20 @@ async function finish(ctx, kind, p, planes, clock) {
   let lx = -0.55, ly = -0.65, lz = 0.52;
   const lm = Math.sqrt(lx * lx + ly * ly + lz * lz);
   lx /= lm; ly /= lm; lz /= lm;
-  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1) * (cfg.reliefK || 1);
-  const gloss = cfg.gloss * (0.3 + p.empaste);
+  // LUZ: intensidad de la luz rasante (0 = sin volumen visible, 0.5 = normal, 1 = muy marcada)
+  const luz = p.luz === undefined ? 0.5 : p.luz;
+  const luzK = luz <= 0.5 ? luz * 2 : 1 + (luz - 0.5) * 2.4;
+  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1) * (cfg.reliefK || 1) * luzK;
+  const gloss = cfg.gloss * (0.3 + p.empaste) * Math.min(1.6, luzK);
+  // oclusión: los surcos de la pasta reciben menos luz (más profundidad)
+  let Hm = null;
+  if (Hh && luzK > 0.02) {
+    Hm = Float32Array.from(Hh);
+    const tmpA = new Float32Array(N), ra = Math.max(2, Math.round(2.5 * Math.sqrt(s)));
+    C.boxBlurH(Hm, tmpA, W, H, ra); C.boxBlurV(tmpA, Hm, W, H, ra);
+    C.boxBlurH(Hm, tmpA, W, H, ra); C.boxBlurV(tmpA, Hm, W, H, ra);
+  }
+  const aoK = 0.9 * luzK * (0.3 + p.empaste) * cfg.shade;
   const selFull = ctx.selFull;
   const data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
   const chalk = kind === "gouache";
@@ -1997,7 +2011,8 @@ async function finish(ctx, kind, p, planes, clock) {
         nx *= nm; ny *= nm; nz *= nm;
         const ndl = nx * lx + ny * ly + nz * lz;
         const dif = (ndl - lz) * 1.15;
-        const k = 1 + dif;
+        let k = 1 + dif;
+        if (Hm) { const dv = Hm[i] - Hh[i]; if (dv > 0) k *= 1 - Math.min(0.25, dv * aoK); }
         r *= k; g *= k; b *= k;
         if (gloss > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
           const rv = 2 * ndl * nz - lz;
@@ -2207,6 +2222,19 @@ function config(kind, p, s) {
     if (m === "manley") Object.assign(c, { libs: ["pin_manley"], R0: c.R0 * 0.75, tooth: 0.92, op: 0.88, sparse: 0.6, thick: 0.08, sK: 0.4, ridge: 0.1, wet: 0, gloss: 0.06, handK: 0.3,
       palK: 0.85, palN: 14, satK: 1.3, layers: L(1.3), minLenK: 5 });
   }
+  // REALISMO (0..1, 0.5 = la variante tal cual): más alto se parece más a la foto, más bajo es más abstracto
+  const d = (p.realismo === undefined ? 0.5 : p.realismo) - 0.5;
+  c.layers = Math.max(1, Math.min(6, Math.round(c.layers + d * 4.5)));
+  c.refineT *= 1 - d * 1.1;
+  c.lost = Math.max(0, c.lost * (1 - d * 1.5));
+  c.planeK = C.clamp(c.planeK - d * 0.7, 0, 1);
+  c.varK *= 1 - d * 0.8;
+  c.temp *= 1 - d * 0.7;
+  c.R0 *= 1 - d * 0.55;
+  c.tolStop *= 1 - d * 0.45;
+  c.refSig = 1.3 * (1 - d * 0.9);       // cuánto se simplifica la referencia de cada capa
+  c.minRK = 1 - d * 1.0;                // pincel más fino posible
+  c.sizeVar = (c.sizeVar || 0.15) * (1 - d * 0.5);
   return c;
 }
 
@@ -2308,11 +2336,11 @@ async function paint(ctx, kind, p, seg, clock) {
   const lumSorted = Array.from(seg.reg.lum).sort((a, b) => a - b);
   const lumMed = lumSorted[(lumSorted.length / 2) | 0] || 0.5;
   const radii = [];
-  { let R = cfg.R0; const minR = Math.max(1.1, 0.9 * s); for (let k = 0; k < cfg.layers; k++) { radii.push(Math.max(minR, R)); R *= cfg.ratio; if (R < minR) break; } }
+  { let R = cfg.R0; const minR = Math.max(1.1, 0.9 * s * (cfg.minRK || 1)); for (let k = 0; k < cfg.layers; k++) { radii.push(Math.max(minR, R)); R *= cfg.ratio; if (R < minR) break; } }
   const nL = radii.length;
   const refs = [];
   for (let k = 0; k < nL; k++) {
-    const sig = Math.max(1.2, radii[k] * ctx.ax * 1.3);
+    const sig = Math.max(1.0, radii[k] * ctx.ax * (cfg.refSig || 1.3));
     const ref = await dtFilter(src, aw, ah, sig, 0.32, 2, clock);
     adjustRef(ref, ctx, seg, cfg, model, lumMed);
     refs.push(ref);
@@ -2366,13 +2394,15 @@ async function paint(ctx, kind, p, seg, clock) {
         const ox = (C.bilinear(nX, gw, gh, x / 24, y / 24) - 0.5) * 2 * wob;
         const oy = (C.bilinear(nY, gw, gh, x / 24, y / 24) - 0.5) * 2 * wob;
         refAt(ref0, x + ox, y + oy, col);
-        let r = col[0], g = col[1], b = col[2];
+        let r = col[0], g = col[1], b = col[2], tRel = 0;
         if (tsamp) {
           // la capa de fondo no es plana: lleva la textura de un frotado real
           const rg = seg.labels[Math.min(ah - 1, ((y + oy) * ctx.ay) | 0) * aw + Math.min(aw - 1, Math.max(0, ((x + ox) * ctx.ax) | 0))];
           const t = tileFor(rg);
-          const l = t.l(x, y), k = 1 + cfg.tileAmt * 0.11 * (l < -2.5 ? -2.5 : l > 2.5 ? 2.5 : l);
+          const l = t.l(x, y), lc = l < -2.5 ? -2.5 : l > 2.5 ? 2.5 : l, k = 1 + cfg.tileAmt * 0.11 * lc;
           r *= k; g *= k; b *= k;
+          // la textura real también es relieve (la pintura frotada tiene cuerpo)
+          tRel = cfg.tileAmt * cfg.thick * 0.07 * (lc + 2.5);
           if (t.prep.cr) { t.c(x, y, cch); const kc = cfg.tileAmt * 0.5; r += cch[0] * kc; b += cch[1] * kc; g -= (0.299 * cch[0] + 0.114 * cch[1]) / 0.587 * kc; }
           r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
         }
@@ -2384,7 +2414,7 @@ async function paint(ctx, kind, p, seg, clock) {
         }
         const a = m * cfg.baseOp;
         Pr[i] = r * a; Pg[i] = g * a; Pb[i] = b * a; Cv[i] = a;
-        Hh[i] = 0.04 * a;
+        Hh[i] = (0.04 + tRel) * a;
         Bc[i * 3] = (col[0] * 255 + 0.5) | 0; Bc[i * 3 + 1] = (col[1] * 255 + 0.5) | 0; Bc[i * 3 + 2] = (col[2] * 255 + 0.5) | 0;
         Pc[i * 3] = (r * 255 + 0.5) | 0; Pc[i * 3 + 1] = (g * 255 + 0.5) | 0; Pc[i * 3 + 2] = (b * 255 + 0.5) | 0;
       }
@@ -2457,7 +2487,12 @@ async function paint(ctx, kind, p, seg, clock) {
   function pickSample(L, Rr) {
     const want = Math.log(Math.max(1.2, (L + Rr) / (2 * Rr)));
     let tot = 0;
-    for (let i = 0; i < lib.length; i++) { const d = logAsp[i] - want; wts[i] = (lib[i].q || 1) * Math.exp(-d * d * 2.2); tot += wts[i]; }
+    for (let i = 0; i < lib.length; i++) {
+      const d = logAsp[i] - want;
+      // escala de las cerdas: la textura debe mapearse cerca de 1:1 (ni cerdas gigantes ni borrosas)
+      const ks = Math.log(Math.max(0.05, lib[i].w / (2 * Rr)));
+      wts[i] = (lib[i].q || 1) * Math.exp(-d * d * 2.2) * Math.exp(-ks * ks * 0.6); tot += wts[i];
+    }
     let t = rand() * tot;
     for (let i = 0; i < lib.length; i++) { t -= wts[i]; if (t <= 0) return lib[i]; }
     return lib[lib.length - 1];
@@ -4076,9 +4111,11 @@ const PARAMS = {
   varSat:     { label: "Variación de saturación", hint: "Cambio de intensidad de color entre trazos" },
   varLuz:     { label: "Variación de luz", hint: "Cambio de claridad entre trazos" },
   detalle:    { label: "Detalle", hint: "Más trazos y más finos en lo importante" },
+  realismo:   { label: "Realismo", hint: "Alto: se parece más a la fotografía · Bajo: más abstracto" },
+  luz:        { label: "Luz", hint: "Luz rasante sobre la pintura. Al mínimo no se ven los volúmenes del empaste" },
 };
 
-const PAINT = ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "varTono", "varSat", "varLuz", "detalle"];
+const PAINT = ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "varTono", "varSat", "varLuz", "detalle", "realismo", "luz"];
 
 const TECHNIQUES = [
   {
@@ -4093,7 +4130,7 @@ const TECHNIQUES = [
   },
   {
     id: "lapiz", name: "Lápiz", desc: "Grafito y carboncillo en grises",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "cruzado", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "cruzado", "detalle", "realismo"],
     variants: [
       { id: "linea", name: "Línea suelta", values: { intensidad: 70, grosor: 22, longitud: 60, curvatura: 60, cobertura: 55, cruzado: 20, detalle: 70 } },
       { id: "rayado", name: "Rayado", values: { intensidad: 65, grosor: 24, longitud: 50, curvatura: 45, cobertura: 85, cruzado: 55, detalle: 60 } },
@@ -4113,7 +4150,7 @@ const TECHNIQUES = [
   },
   {
     id: "acuarela", name: "Acuarela", desc: "Aguadas transparentes, bordes húmedos y pigmento",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "humedad", "granulado", "varTono", "varSat", "varLuz", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "humedad", "granulado", "varTono", "varSat", "varLuz", "detalle", "realismo"],
     variants: [
       { id: "humeda", name: "Manchas húmedas", values: { intensidad: 78, grosor: 55, longitud: 35, curvatura: 50, cobertura: 75, humedad: 85, granulado: 40, varTono: 25, varSat: 20, varLuz: 20, detalle: 40 } },
       { id: "capas", name: "Paisaje por capas", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 85, humedad: 50, granulado: 45, varTono: 22, varSat: 20, varLuz: 20, detalle: 50 } },
@@ -4124,7 +4161,7 @@ const TECHNIQUES = [
   },
   {
     id: "ceras", name: "Ceras", desc: "Óleo en barra, pastel y ceras de colores sobre el grano del papel",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle", "realismo", "luz"],
     variants: [
       { id: "barra", name: "Óleo en barra", values: { intensidad: 88, grosor: 58, longitud: 45, curvatura: 50, cobertura: 95, empaste: 70, cruzado: 25, varTono: 25, varSat: 25, varLuz: 22, detalle: 45 } },
       { id: "pastelgraso", name: "Pastel graso", values: { intensidad: 80, grosor: 48, longitud: 40, curvatura: 55, cobertura: 92, empaste: 35, cruzado: 40, varTono: 28, varSat: 28, varLuz: 22, detalle: 55 } },
@@ -4134,7 +4171,7 @@ const TECHNIQUES = [
   },
   {
     id: "mixtalg", name: "Mixta L+G", desc: "Dibujo a lápiz muy presente con manchas de gouache",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle", "realismo", "luz"],
     variants: [
       { id: "maslapiz", name: "Más lápiz", values: { intensidad: 75, grosor: 40, longitud: 45, curvatura: 50, cobertura: 40, empaste: 10, cruzado: 45, varTono: 12, varSat: 12, varLuz: 12, detalle: 70 } },
       { id: "equilibrada", name: "Equilibrada", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 62, empaste: 12, cruzado: 35, varTono: 15, varSat: 15, varLuz: 15, detalle: 60 } },
@@ -4144,7 +4181,7 @@ const TECHNIQUES = [
   },
   {
     id: "xilografia", name: "Xilografía", desc: "Grabado en madera: cortes de gubia y tinta estampada",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "granulado", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "granulado", "detalle", "realismo"],
     variants: [
       { id: "realista", name: "Realista", values: { intensidad: 85, grosor: 35, longitud: 55, curvatura: 70, cobertura: 85, granulado: 45, detalle: 70 } },
       { id: "expresiva", name: "Expresiva", values: { intensidad: 92, grosor: 60, longitud: 45, curvatura: 35, cobertura: 90, granulado: 55, detalle: 40 } },
@@ -4156,7 +4193,8 @@ const TECHNIQUES = [
 
 const BY_ID = {};
 for (const t of TECHNIQUES) {
-  t.defaults = Object.assign({ modo: t.variants[0].id }, t.variants[0].values);
+  // realismo y luz no dependen de la variante (se conservan al cambiarla)
+  t.defaults = Object.assign({ modo: t.variants[0].id, realismo: 50, luz: 50 }, t.variants[0].values);
   t.presets = t.variants.map((v) => ({ name: v.name, values: Object.assign({ modo: v.id }, v.values) }));
   BY_ID[t.id] = t;
 }

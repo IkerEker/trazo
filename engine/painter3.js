@@ -180,6 +180,19 @@ function config(kind, p, s) {
     if (m === "manley") Object.assign(c, { libs: ["pin_manley"], R0: c.R0 * 0.75, tooth: 0.92, op: 0.88, sparse: 0.6, thick: 0.08, sK: 0.4, ridge: 0.1, wet: 0, gloss: 0.06, handK: 0.3,
       palK: 0.85, palN: 14, satK: 1.3, layers: L(1.3), minLenK: 5 });
   }
+  // REALISMO (0..1, 0.5 = la variante tal cual): más alto se parece más a la foto, más bajo es más abstracto
+  const d = (p.realismo === undefined ? 0.5 : p.realismo) - 0.5;
+  c.layers = Math.max(1, Math.min(6, Math.round(c.layers + d * 4.5)));
+  c.refineT *= 1 - d * 1.1;
+  c.lost = Math.max(0, c.lost * (1 - d * 1.5));
+  c.planeK = C.clamp(c.planeK - d * 0.7, 0, 1);
+  c.varK *= 1 - d * 0.8;
+  c.temp *= 1 - d * 0.7;
+  c.R0 *= 1 - d * 0.55;
+  c.tolStop *= 1 - d * 0.45;
+  c.refSig = 1.3 * (1 - d * 0.9);       // cuánto se simplifica la referencia de cada capa
+  c.minRK = 1 - d * 1.0;                // pincel más fino posible
+  c.sizeVar = (c.sizeVar || 0.15) * (1 - d * 0.5);
   return c;
 }
 
@@ -281,11 +294,11 @@ async function paint(ctx, kind, p, seg, clock) {
   const lumSorted = Array.from(seg.reg.lum).sort((a, b) => a - b);
   const lumMed = lumSorted[(lumSorted.length / 2) | 0] || 0.5;
   const radii = [];
-  { let R = cfg.R0; const minR = Math.max(1.1, 0.9 * s); for (let k = 0; k < cfg.layers; k++) { radii.push(Math.max(minR, R)); R *= cfg.ratio; if (R < minR) break; } }
+  { let R = cfg.R0; const minR = Math.max(1.1, 0.9 * s * (cfg.minRK || 1)); for (let k = 0; k < cfg.layers; k++) { radii.push(Math.max(minR, R)); R *= cfg.ratio; if (R < minR) break; } }
   const nL = radii.length;
   const refs = [];
   for (let k = 0; k < nL; k++) {
-    const sig = Math.max(1.2, radii[k] * ctx.ax * 1.3);
+    const sig = Math.max(1.0, radii[k] * ctx.ax * (cfg.refSig || 1.3));
     const ref = await dtFilter(src, aw, ah, sig, 0.32, 2, clock);
     adjustRef(ref, ctx, seg, cfg, model, lumMed);
     refs.push(ref);
@@ -339,13 +352,15 @@ async function paint(ctx, kind, p, seg, clock) {
         const ox = (C.bilinear(nX, gw, gh, x / 24, y / 24) - 0.5) * 2 * wob;
         const oy = (C.bilinear(nY, gw, gh, x / 24, y / 24) - 0.5) * 2 * wob;
         refAt(ref0, x + ox, y + oy, col);
-        let r = col[0], g = col[1], b = col[2];
+        let r = col[0], g = col[1], b = col[2], tRel = 0;
         if (tsamp) {
           // la capa de fondo no es plana: lleva la textura de un frotado real
           const rg = seg.labels[Math.min(ah - 1, ((y + oy) * ctx.ay) | 0) * aw + Math.min(aw - 1, Math.max(0, ((x + ox) * ctx.ax) | 0))];
           const t = tileFor(rg);
-          const l = t.l(x, y), k = 1 + cfg.tileAmt * 0.11 * (l < -2.5 ? -2.5 : l > 2.5 ? 2.5 : l);
+          const l = t.l(x, y), lc = l < -2.5 ? -2.5 : l > 2.5 ? 2.5 : l, k = 1 + cfg.tileAmt * 0.11 * lc;
           r *= k; g *= k; b *= k;
+          // la textura real también es relieve (la pintura frotada tiene cuerpo)
+          tRel = cfg.tileAmt * cfg.thick * 0.07 * (lc + 2.5);
           if (t.prep.cr) { t.c(x, y, cch); const kc = cfg.tileAmt * 0.5; r += cch[0] * kc; b += cch[1] * kc; g -= (0.299 * cch[0] + 0.114 * cch[1]) / 0.587 * kc; }
           r = r < 0 ? 0 : r > 1 ? 1 : r; g = g < 0 ? 0 : g > 1 ? 1 : g; b = b < 0 ? 0 : b > 1 ? 1 : b;
         }
@@ -357,7 +372,7 @@ async function paint(ctx, kind, p, seg, clock) {
         }
         const a = m * cfg.baseOp;
         Pr[i] = r * a; Pg[i] = g * a; Pb[i] = b * a; Cv[i] = a;
-        Hh[i] = 0.04 * a;
+        Hh[i] = (0.04 + tRel) * a;
         Bc[i * 3] = (col[0] * 255 + 0.5) | 0; Bc[i * 3 + 1] = (col[1] * 255 + 0.5) | 0; Bc[i * 3 + 2] = (col[2] * 255 + 0.5) | 0;
         Pc[i * 3] = (r * 255 + 0.5) | 0; Pc[i * 3 + 1] = (g * 255 + 0.5) | 0; Pc[i * 3 + 2] = (b * 255 + 0.5) | 0;
       }
@@ -430,7 +445,12 @@ async function paint(ctx, kind, p, seg, clock) {
   function pickSample(L, Rr) {
     const want = Math.log(Math.max(1.2, (L + Rr) / (2 * Rr)));
     let tot = 0;
-    for (let i = 0; i < lib.length; i++) { const d = logAsp[i] - want; wts[i] = (lib[i].q || 1) * Math.exp(-d * d * 2.2); tot += wts[i]; }
+    for (let i = 0; i < lib.length; i++) {
+      const d = logAsp[i] - want;
+      // escala de las cerdas: la textura debe mapearse cerca de 1:1 (ni cerdas gigantes ni borrosas)
+      const ks = Math.log(Math.max(0.05, lib[i].w / (2 * Rr)));
+      wts[i] = (lib[i].q || 1) * Math.exp(-d * d * 2.2) * Math.exp(-ks * ks * 0.6); tot += wts[i];
+    }
     let t = rand() * tot;
     for (let i = 0; i < lib.length; i++) { t -= wts[i]; if (t <= 0) return lib[i]; }
     return lib[lib.length - 1];

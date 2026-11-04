@@ -89,7 +89,9 @@ async function render(input, opts, hooks) {
   ctx.buildCoverage(p.cobertura, { lumWeight: tech === "acuarela" ? 0.7 : tech === "lapiz" || tech === "ceras" ? 0.45 : 0.55 });
 
   const [d0, d1] = DETAIL[tech];
-  const detail = tech === "xilografia" && p.modo === "expresiva" ? 0.12 + 0.3 * p.detalle : d0 + d1 * p.detalle;
+  let detail = tech === "xilografia" && p.modo === "expresiva" ? 0.12 + 0.3 * p.detalle : d0 + d1 * p.detalle;
+  // realismo: más alto = la imagen se divide en más manchas (más parecido a la foto)
+  detail = Math.max(0.05, Math.min(1.15, detail * (0.5 + p.realismo)));
   clock.stage(0.11, 0.2, "Viendo la imagen en manchas");
   const seg = await Seg.segment(ctx, { detail }, clock);
   // etiquetas a resolución completa (el pintor por capas no las necesita)

@@ -19,9 +19,11 @@ const PARAMS = {
   varSat:     { label: "Variación de saturación", hint: "Cambio de intensidad de color entre trazos" },
   varLuz:     { label: "Variación de luz", hint: "Cambio de claridad entre trazos" },
   detalle:    { label: "Detalle", hint: "Más trazos y más finos en lo importante" },
+  realismo:   { label: "Realismo", hint: "Alto: se parece más a la fotografía · Bajo: más abstracto" },
+  luz:        { label: "Luz", hint: "Luz rasante sobre la pintura. Al mínimo no se ven los volúmenes del empaste" },
 };
 
-const PAINT = ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "varTono", "varSat", "varLuz", "detalle"];
+const PAINT = ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "varTono", "varSat", "varLuz", "detalle", "realismo", "luz"];
 
 const TECHNIQUES = [
   {
@@ -36,7 +38,7 @@ const TECHNIQUES = [
   },
   {
     id: "lapiz", name: "Lápiz", desc: "Grafito y carboncillo en grises",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "cruzado", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "cruzado", "detalle", "realismo"],
     variants: [
       { id: "linea", name: "Línea suelta", values: { intensidad: 70, grosor: 22, longitud: 60, curvatura: 60, cobertura: 55, cruzado: 20, detalle: 70 } },
       { id: "rayado", name: "Rayado", values: { intensidad: 65, grosor: 24, longitud: 50, curvatura: 45, cobertura: 85, cruzado: 55, detalle: 60 } },
@@ -56,7 +58,7 @@ const TECHNIQUES = [
   },
   {
     id: "acuarela", name: "Acuarela", desc: "Aguadas transparentes, bordes húmedos y pigmento",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "humedad", "granulado", "varTono", "varSat", "varLuz", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "humedad", "granulado", "varTono", "varSat", "varLuz", "detalle", "realismo"],
     variants: [
       { id: "humeda", name: "Manchas húmedas", values: { intensidad: 78, grosor: 55, longitud: 35, curvatura: 50, cobertura: 75, humedad: 85, granulado: 40, varTono: 25, varSat: 20, varLuz: 20, detalle: 40 } },
       { id: "capas", name: "Paisaje por capas", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 85, humedad: 50, granulado: 45, varTono: 22, varSat: 20, varLuz: 20, detalle: 50 } },
@@ -67,7 +69,7 @@ const TECHNIQUES = [
   },
   {
     id: "ceras", name: "Ceras", desc: "Óleo en barra, pastel y ceras de colores sobre el grano del papel",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle", "realismo", "luz"],
     variants: [
       { id: "barra", name: "Óleo en barra", values: { intensidad: 88, grosor: 58, longitud: 45, curvatura: 50, cobertura: 95, empaste: 70, cruzado: 25, varTono: 25, varSat: 25, varLuz: 22, detalle: 45 } },
       { id: "pastelgraso", name: "Pastel graso", values: { intensidad: 80, grosor: 48, longitud: 40, curvatura: 55, cobertura: 92, empaste: 35, cruzado: 40, varTono: 28, varSat: 28, varLuz: 22, detalle: 55 } },
@@ -77,7 +79,7 @@ const TECHNIQUES = [
   },
   {
     id: "mixtalg", name: "Mixta L+G", desc: "Dibujo a lápiz muy presente con manchas de gouache",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "empaste", "cruzado", "varTono", "varSat", "varLuz", "detalle", "realismo", "luz"],
     variants: [
       { id: "maslapiz", name: "Más lápiz", values: { intensidad: 75, grosor: 40, longitud: 45, curvatura: 50, cobertura: 40, empaste: 10, cruzado: 45, varTono: 12, varSat: 12, varLuz: 12, detalle: 70 } },
       { id: "equilibrada", name: "Equilibrada", values: { intensidad: 72, grosor: 45, longitud: 40, curvatura: 50, cobertura: 62, empaste: 12, cruzado: 35, varTono: 15, varSat: 15, varLuz: 15, detalle: 60 } },
@@ -87,7 +89,7 @@ const TECHNIQUES = [
   },
   {
     id: "xilografia", name: "Xilografía", desc: "Grabado en madera: cortes de gubia y tinta estampada",
-    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "granulado", "detalle"],
+    params: ["intensidad", "grosor", "longitud", "curvatura", "cobertura", "granulado", "detalle", "realismo"],
     variants: [
       { id: "realista", name: "Realista", values: { intensidad: 85, grosor: 35, longitud: 55, curvatura: 70, cobertura: 85, granulado: 45, detalle: 70 } },
       { id: "expresiva", name: "Expresiva", values: { intensidad: 92, grosor: 60, longitud: 45, curvatura: 35, cobertura: 90, granulado: 55, detalle: 40 } },
@@ -99,7 +101,8 @@ const TECHNIQUES = [
 
 const BY_ID = {};
 for (const t of TECHNIQUES) {
-  t.defaults = Object.assign({ modo: t.variants[0].id }, t.variants[0].values);
+  // realismo y luz no dependen de la variante (se conservan al cambiarla)
+  t.defaults = Object.assign({ modo: t.variants[0].id, realismo: 50, luz: 50 }, t.variants[0].values);
   t.presets = t.variants.map((v) => ({ name: v.name, values: Object.assign({ modo: v.id }, v.values) }));
   BY_ID[t.id] = t;
 }

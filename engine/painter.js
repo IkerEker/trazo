@@ -456,8 +456,20 @@ async function finish(ctx, kind, p, planes, clock) {
   let lx = -0.55, ly = -0.65, lz = 0.52;
   const lm = Math.sqrt(lx * lx + ly * ly + lz * lz);
   lx /= lm; ly /= lm; lz /= lm;
-  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1) * (cfg.reliefK || 1);
-  const gloss = cfg.gloss * (0.3 + p.empaste);
+  // LUZ: intensidad de la luz rasante (0 = sin volumen visible, 0.5 = normal, 1 = muy marcada)
+  const luz = p.luz === undefined ? 0.5 : p.luz;
+  const luzK = luz <= 0.5 ? luz * 2 : 1 + (luz - 0.5) * 2.4;
+  const relief = (0.12 + 0.95 * p.empaste) * cfg.shade * Math.max(0.6, Math.sqrt(s)) * (planes.real ? 0.55 : 1) * (cfg.reliefK || 1) * luzK;
+  const gloss = cfg.gloss * (0.3 + p.empaste) * Math.min(1.6, luzK);
+  // oclusión: los surcos de la pasta reciben menos luz (más profundidad)
+  let Hm = null;
+  if (Hh && luzK > 0.02) {
+    Hm = Float32Array.from(Hh);
+    const tmpA = new Float32Array(N), ra = Math.max(2, Math.round(2.5 * Math.sqrt(s)));
+    C.boxBlurH(Hm, tmpA, W, H, ra); C.boxBlurV(tmpA, Hm, W, H, ra);
+    C.boxBlurH(Hm, tmpA, W, H, ra); C.boxBlurV(tmpA, Hm, W, H, ra);
+  }
+  const aoK = 0.9 * luzK * (0.3 + p.empaste) * cfg.shade;
   const selFull = ctx.selFull;
   const data = ctx.data, comp = ctx.comp, srcA = ctx.srcAlpha;
   const chalk = kind === "gouache";
@@ -496,7 +508,8 @@ async function finish(ctx, kind, p, planes, clock) {
         nx *= nm; ny *= nm; nz *= nm;
         const ndl = nx * lx + ny * ly + nz * lz;
         const dif = (ndl - lz) * 1.15;
-        const k = 1 + dif;
+        let k = 1 + dif;
+        if (Hm) { const dv = Hm[i] - Hh[i]; if (dv > 0) k *= 1 - Math.min(0.25, dv * aoK); }
         r *= k; g *= k; b *= k;
         if (gloss > 0 && (!cfg.glossByHeight || Hh[i] > 0.08)) {
           const rv = 2 * ndl * nz - lz;
