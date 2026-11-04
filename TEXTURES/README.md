@@ -1,7 +1,7 @@
 # TEXTURES
 
 Material real con el que pinta Trazo. Cada técnica tiene su carpeta con el mismo nombre en
-todas las secciones: `OLEO`, `GUACHE`, `AGUADAS` (acuarela), `LAPIZ` y `ROTULADORES`.
+todas las secciones: `OLEO`, `GUACHE`, `AGUADAS` (acuarela), `LAPIZ`, `ROTULADORES` y `XILOGRAFIA`.
 `CERAS` se mantiene por si se usa en la mixta completa. Los estilos mixtos no tienen carpeta
 propia: combinan el material de sus técnicas.
 

@@ -12,6 +12,7 @@ Obras reales de cada estilo, **solo para estudiarlas**. El plugin no las usa ni 
 | `ROTULADORES/` | Rotuladores (tipo Copic/Promarker, de alcohol o de agua) |
 | `MIXTA_LAPIZ_GUACHE/` | Mixta: dibujo a lápiz con gouache encima |
 | `MIXTA_COMPLETA/` | Mixta completa: varias técnicas en la misma obra |
+| `XILOGRAFIA/` | Xilografía (grabado en madera) |
 
 ## Qué estudio en cada imagen
 - Cómo se construye: qué va primero, qué se deja sin pintar y qué se detalla.
