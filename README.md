@@ -225,6 +225,11 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    - **Detalle fino encima**: sobre los garabatos, líneas más finas y cortas que siguen la dirección
      fina de la foto dibujan los rasgos (ojos, labios, nariz, mechones), sobre todo en lo importante.
      Donde el dibujo quedó más oscuro que la foto (luces dentro de lo oscuro), una goma saca el grafito.
+   - **Acentos oscuros encima**: al final, como un dibujante que vuelve con presión sobre lo más
+     hondo, zigzags oscuros y decididos (trazo más grueso, casi negro, con la vuelta en punta) en
+     grupos irregulares sobre los oscuros con forma (pelo, sombras con textura), y trazos cortos que
+     marcan ojos, cejas, nariz y boca. No es regular: unas zonas se trabajan mucho y otras se dejan
+     sueltas.
    - **Escala de valores adaptada al motivo**: se estira el rango de la foto y se comprime el tono a
      gran escala, así una cara oscura se dibuja en medios tonos y los negros quedan para lo más hondo.
    - **Contornos**: muy pocos, finísimos y rotos, solo en los bordes más marcados y en los rasgos.

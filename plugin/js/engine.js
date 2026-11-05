@@ -1,4 +1,4 @@
-/*! Trazo 1.12.0 · motor de pintura (generado por tools/bundle.js, no editar) */
+/*! Trazo 1.13.0 · motor de pintura (generado por tools/bundle.js, no editar) */
 (function (root) {
 "use strict";
 const __defs = {}, __cache = {};
@@ -1206,11 +1206,11 @@ function config(p) {
     ],
     crossK: 0.35 + 0.9 * p.cruzado, curvK: 0.12 + 0.4 * p.curvatura, hook: 0.45,
     edgeP: 0.12 + 0.25 * p.detalle, edgeThr: 0.5, focusK: 0.38, edgeLW: 0.22, edgePr: 0.42,
-    base: 0.26, lc: 0.6, lcFine: 1.1, comp: 0.84, adapt: 0.38, fineK: 1, gamma: 0.92, dMax: 0.9, charcoal: false, smudge: 0, white: 0.03, detailK: 0.6,
+    base: 0.26, lc: 0.6, lcFine: 1.1, comp: 0.84, adapt: 0.38, fineK: 1, accent: 1, irreg: 0.32, featK: 1, gamma: 0.92, dMax: 0.9, charcoal: false, smudge: 0, white: 0.03, detailK: 0.6,
   };
-  if (m === "linea") Object.assign(c, { base: 0.16, fineK: 0.7, levels: c.levels.slice(0, 3).map((l, i) => Object.assign({}, l, { cap: [0.22, 0.36, 0.48][i] })), edgeP: 0.55 + 0.4 * p.detalle, edgeThr: 0.3, edgePr: 0.55, lenK: c.lenK * 1.15, hook: 0.25 });
-  if (m === "carbon") Object.assign(c, { base: 0.36, fineK: 0.8, lwK: c.lwK * 2.2, lenK: c.lenK * 1.1, kappa: 0.66 + 0.15 * p.intensidad, charcoal: true, smudge: 0.5, dMax: 0.97, edgeLW: 0.35, edgePr: 0.5, gamma: 0.9, hook: 0.3 });
-  if (m === "negros") Object.assign(c, { adapt: 0.25, kappa: c.kappa + 0.08, gamma: 0.85, lc: 0.8, crossK: c.crossK * 1.25, levels: c.levels.map((l) => Object.assign({}, l, { cap: Math.min(0.95, l.cap + 0.06) })).concat([{ t: 0.82, cap: 0.93, rot: 1.05 }]) });
+  if (m === "linea") Object.assign(c, { base: 0.16, fineK: 0.7, accent: 0.55, featK: 1.2, levels: c.levels.slice(0, 3).map((l, i) => Object.assign({}, l, { cap: [0.22, 0.36, 0.48][i] })), edgeP: 0.55 + 0.4 * p.detalle, edgeThr: 0.3, edgePr: 0.55, lenK: c.lenK * 1.15, hook: 0.25 });
+  if (m === "carbon") Object.assign(c, { base: 0.36, fineK: 0.8, accent: 0.6, lwK: c.lwK * 2.2, lenK: c.lenK * 1.1, kappa: 0.66 + 0.15 * p.intensidad, charcoal: true, smudge: 0.5, dMax: 0.97, edgeLW: 0.35, edgePr: 0.5, gamma: 0.9, hook: 0.3 });
+  if (m === "negros") Object.assign(c, { adapt: 0.25, accent: 1.5, irreg: 0.4, kappa: c.kappa + 0.08, gamma: 0.85, lc: 0.8, crossK: c.crossK * 1.25, levels: c.levels.map((l) => Object.assign({}, l, { cap: Math.min(0.95, l.cap + 0.06) })).concat([{ t: 0.82, cap: 0.93, rot: 1.05 }]) });
   // realismo: alto = más capas finas, trazos más cortos y más contornos; bajo = garabato grande y suelto
   const d = (p.realismo === undefined ? 0.5 : p.realismo) - 0.5;
   c.lenK *= 1 - d * 0.7;
@@ -1323,6 +1323,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
   const raster = new S.StrokeRaster(W, H);
   const path = new S.StrokePath();
   const kap = cfg.kappa;
+  let kapMul = 1;
   let TT = Tf, flowFine = false;     // tono que siguen los trazos y campo de direcciones (fino o suave)
   function drawLine(xs, ys, n, lw, pBase, tk, tcap) {
     if (n < 2) return;
@@ -1371,7 +1372,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
       const pc = pr > 1 ? 1 : pr;
       const gAmt = 0.78 - 0.42 * pc;
       const cov = 1 - gAmt * C.smoothstep(0.62, 0.05, gg);
-      const a = Math.pow(pc, 0.75) * cov * kap;
+      const a = Math.min(0.97, Math.pow(pc, 0.75) * cov * kap * kapMul);
       if (a > 0.002) Tr[g] *= 1 - a;
     }
     raster.clear();
@@ -1469,6 +1470,10 @@ async function paint(ctx, p, clock, seg, Lfull) {
   const lw0p = Math.max(1.2, cfg.lwK * longS);
   const L0 = cfg.lenK * longS;
   const levels = cfg.levels;
+  // mapa de "trabajo": como a mano, unas zonas se trabajan mucho y otras se dejan sueltas
+  const gwI = Math.max(4, Math.ceil(W / 64)), ghI = Math.max(4, Math.ceil(H / 64));
+  const nzI = C.fbmGrid(gwI, ghI, Math.max(2, gwI / 5), 3, ctx.seed + 57, 0.55);
+  const workAt = (x, y) => 1 + cfg.irreg * (C.bilinear(nzI, gwI, ghI, x / 64, y / 64) - 0.5) * 2.2;
   const dAt = (x, y) => { const xi = C.clamp(x | 0, 0, W - 1), yi = C.clamp(y | 0, 0, H - 1); return 1 - Tr[yi * W + xi]; };
   for (let k = 0; k < levels.length; k++) {
     const lv = levels[k];
@@ -1485,7 +1490,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
       const x = Math.min(W - 1, cand[order[oi] * 2]), y = Math.min(H - 1, cand[order[oi] * 2 + 1]);
       const Tc = Tf[(y | 0) * W + (x | 0)] / 255;
       if (Tc < lv.t + 0.03) continue;
-      const need = Math.min(Tc, lv.cap);
+      const need = Math.min(Tc, lv.cap * workAt(x, y));
       const cur = dAt(x, y);
       if (cur >= need - 0.04) continue;
       // detalle: trazos más cortos y finos en los bordes y en lo importante
@@ -1496,7 +1501,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
       const gap = lw * (1.05 + 0.9 * rand()) * gapK;
       const m = 3 + ((rand() * 7) | 0);
       const pBase = 0.85 + 0.3 * rand();
-      scribble(x, y, L, lw, gap, m, pBase, lv.t, rot + gauss() * 0.06, rand() < cfg.hook, lv.cap);
+      scribble(x, y, L, lw, gap, m, pBase, lv.t, rot + gauss() * 0.16, rand() < cfg.hook, Math.min(0.95, lv.cap * workAt(x, y)));
       if ((oi & 31) === 0) await clock.tick(0.14 + 0.66 * (k + oi / nc) / levels.length);
     }
   }
@@ -1552,6 +1557,81 @@ async function paint(ctx, p, clock, seg, Lfull) {
       raster.clear();
     }
     TT = Tf; flowFine = false;
+  }
+
+  /* --- 6b) ACENTOS: garabatos oscuros y decididos en los oscuros más hondos ---
+   * Como el dibujante que, al final, vuelve con presión sobre lo más oscuro: zigzags
+   * de ida y vuelta con vueltas en punta, trazo más grueso y casi negro, en grupos
+   * irregulares (no por todas partes). Siguen el tono: no invaden las luces. */
+  if (cfg.accent > 0) {
+    TT = Td;
+    const spA = longS * 0.04;
+    const colsA = Math.ceil(W / spA), rowsA = Math.ceil(H / spA);
+    let thrA = 0;
+    { // umbral: el ~18 % más oscuro del tono de detalle
+      const hist = new Float64Array(256);
+      for (let i = 0; i < N; i += 13) hist[Td[i]]++;
+      let tot = 0; for (let i = 0; i < 256; i++) tot += hist[i];
+      let acc2 = 0, k = 255; for (; k > 0; k--) { acc2 += hist[k]; if (acc2 > tot * 0.26) break; }
+      thrA = Math.max(0.52, k / 255);
+    }
+    const zx = new Float32Array(4300), zy = new Float32Array(4300);
+    for (let gy = 0; gy < rowsA; gy++) {
+      for (let gx = 0; gx < colsA; gx++) {
+        // el punto más oscuro de la celda (entre unos cuantos)
+        let bx0 = 0, by0 = 0, bt = -1;
+        for (let q = 0; q < 6; q++) {
+          const x = Math.min(W - 1, (gx + rand()) * spA), y = Math.min(H - 1, (gy + rand()) * spA);
+          const t = Td[(y | 0) * W + (x | 0)] / 255;
+          if (t > bt) { bt = t; bx0 = x; by0 = y; }
+        }
+        if (bt < thrA) continue;
+        const im = seg ? ctx.at(seg.imp, bx0, by0) : 0.5;
+        const act = ctx.at(ctx.edge, bx0, by0);
+        const pAcc = C.smoothstep(0.015, 0.1, act) * cfg.accent * 1.1 * C.smoothstep(thrA - 0.04, Math.min(0.98, thrA + 0.14), bt) * (0.55 + 0.6 * im) * workAt(bx0, by0);
+        if (rand() > pAcc) continue;
+        // zigzag continuo: pasadas de ida y vuelta con la vuelta en punta
+        const La = longS * (0.035 + 0.055 * rand());
+        const lwA = Math.min(lw0p * (1.5 + 1.1 * rand()), longS * 0.009);
+        const n = centerLine(bx0, by0, La, Math.max(1.2, lwA), gauss() * 0.12);
+        if (n < 3) continue;
+        const mA = 3 + ((rand() * 4) | 0), gapA = lwA * (1.3 + 1.0 * rand());
+        let k = 0;
+        for (let j = 0; j < mA && k < 4000; j++) {
+          const off = (j - (mA - 1) / 2) * gapA;
+          const i0 = Math.floor(rand() * 0.25 * n), i1 = n - 1 - Math.floor(rand() * 0.25 * n);
+          if (i1 - i0 < 2) continue;
+          if (j & 1) { for (let i = i1; i >= i0; i--) { zx[k] = clx[i] + cnx[i] * off; zy[k] = cly[i] + cny[i] * off; k++; } }
+          else { for (let i = i0; i <= i1; i++) { zx[k] = clx[i] + cnx[i] * off; zy[k] = cly[i] + cny[i] * off; k++; } }
+        }
+        if (k < 3) continue;
+        kapMul = 1.45;
+        drawLine(zx, zy, k, lwA, 1.1 + 0.2 * rand(), thrA - 0.35, Math.min(1, thrA + 0.05));
+        kapMul = 1;
+      }
+      if ((gy & 7) === 0) await clock.tick(0.84 + 0.02 * gy / rowsA);
+    }
+    // rasgos: ojos, cejas, nariz, boca... algo más oscuros y nítidos (trazos cortos y finos)
+    if (seg && cfg.featK > 0) {
+      flowFine = true;
+      const lwR = Math.max(1, lw0p * 0.55), spR = Math.max(lwR * 2.5, longS * 0.008);
+      const colsR = Math.ceil(W / spR), rowsR = Math.ceil(H / spR);
+      for (let gy = 0; gy < rowsR; gy++) {
+        for (let gx = 0; gx < colsR; gx++) {
+          const x = Math.min(W - 1, (gx + rand()) * spR), y = Math.min(H - 1, (gy + rand()) * spR);
+          const im = ctx.at(seg.imp, x, y);
+          if (im < 0.55) continue;
+          const g = (y | 0) * W + (x | 0), t = Td[g] / 255, ed = ctx.at(ctx.edgeRaw, x, y);
+          if (t < 0.45 || ed < 0.25 || rand() > cfg.featK * 0.7 * ed) continue;
+          if (t - (1 - Tr[g]) < -0.05) continue;
+          kapMul = 1.2;
+          scribble(x, y, longS * (0.012 + 0.02 * rand()), lwR, lwR * 1.4, 1 + ((rand() * 3) | 0), 1.0, t - 0.3, gauss() * 0.1, false);
+          kapMul = 1;
+        }
+      }
+      flowFine = false;
+    }
+    TT = Tf;
   }
 
   /* --- 7) contornos: muy pocos, finísimos y rotos --- */
