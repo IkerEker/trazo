@@ -185,7 +185,12 @@ class Context {
           const tl = Lxx[i] + Lyy[i];
           const cL = C.smoothstep(lowT, highT, tl), iL = tl > 1e-12 ? cL / tl : 0;
           const bx = (Lxx[i] * iL + gxx * gxx * (1 - cL)), bxy = (Lxy[i] * iL + gxx * gyy * (1 - cL)), by = (Lyy[i] * iL + gyy * gyy * (1 - cL));
-          Jxx = jxx[i] + e * bx; Jxy = jxy[i] + e * bxy; Jyy = jyy[i] + e * by;
+          if (opts.textureHand) {
+            // las texturas sin forma (follaje, tela, madera) se rayan en la dirección de la mano;
+            // solo las zonas lisas heredan la dirección de las formas que las rodean
+            const el = localK * tr * (1 - co) * (1 - co);
+            Jxx = jxx[i] + eps * bx + el * gxx * gxx; Jxy = jxy[i] + eps * bxy + el * gxx * gyy; Jyy = jyy[i] + eps * by + el * gyy * gyy;
+          } else { Jxx = jxx[i] + e * bx; Jxy = jxy[i] + e * bxy; Jyy = jyy[i] + e * by; }
         } else {
           Jxx = jxx[i] + e * gxx * gxx; Jxy = jxy[i] + e * gxx * gyy; Jyy = jyy[i] + e * gyy * gyy;
         }

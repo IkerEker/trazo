@@ -395,9 +395,74 @@ def sheet(planes, labels, path, invert=False):
     W.save(path, quality=85)
 
 
+# ------------------------------------------------------------------ grano real del grafito y del carbón
+def build_grano():
+    """Tiras de grano de los escaneos de TEXTURES/TRAZOS/LAPIZ a su escala real.
+
+    Cada tira es el interior de un trazo ancho de grafito o carbón (vertical en el
+    escaneo, así que el grano va estirado a lo largo del trazo). Se guarda
+    ecualizada (0..1 uniforme) para que el umbral de presión signifique lo mismo en
+    todas. Etiqueta "lapiz" (gris, fino) o "carbon" (negro, áspero).
+    """
+    files = g(os.path.join(TR, "LAPIZ", "*"))
+    items = []
+    for f in files:
+        L = np.asarray(Image.open(f).convert("L")).astype(np.float32) / 255
+        bg = ES.fit_background(L)
+        D = np.clip(1 - L / np.maximum(bg, 0.05), 0, 1)
+        h, w = D.shape
+        prof = ndi.uniform_filter1d(D[int(h * 0.25): int(h * 0.75)].mean(0), 9)
+        on = prof > 0.1
+        lab, n = ndi.label(on)
+        for k in range(1, n + 1):
+            cols = np.where(lab == k)[0]
+            c0, c1 = int(cols[0]), int(cols[-1])
+            wd = c1 - c0
+            if wd < 50:
+                continue
+            i0, i1 = c0 + int(wd * 0.2), c1 - int(wd * 0.2)
+            rowm = D[:, i0:i1].mean(1)
+            med = float(np.median(rowm[int(h * 0.3): int(h * 0.7)]))
+            good = ndi.uniform_filter1d((rowm > 0.55 * med).astype(np.float32), 31) > 0.95
+            rl, rn = ndi.label(good)
+            if rn == 0:
+                continue
+            sizes = ndi.sum(good, rl, range(1, rn + 1))
+            r = int(np.argmax(sizes)) + 1
+            rows = np.where(rl == r)[0]
+            r0, r1 = int(rows[0]) + 20, int(rows[-1]) - 20
+            if r1 - r0 < 400:
+                continue
+            S = D[r0:r1, i0:i1]
+            mean = float(S.mean())
+            # quitar los cambios lentos de presión: queda el grano
+            G = S / np.maximum(ndi.gaussian_filter(S, 22), 0.02)
+            # ecualizar (rango uniforme)
+            flat = G.ravel()
+            order = np.argsort(flat, kind="stable")
+            rk = np.empty_like(order); rk[order] = np.arange(flat.size)
+            E = (rk.reshape(G.shape) / max(1, flat.size - 1) * 255 + 0.5).astype(np.uint8)
+            hh = min(E.shape[0], 1400)
+            E = E[:hh]
+            tag = "carbon" if mean > 0.5 else "lapiz"
+            items.append({"name": os.path.basename(f) + f"#{k}", "tags": [tag], "mean": round(mean, 3),
+                          "pxmm": round(wd / 12.0, 2), "planes": [E]})
+    size = write_items(os.path.join(OUT, "grano_grafito.bin"), "tiles", items)
+    nl = sum(1 for it in items if it["tags"][0] == "lapiz")
+    print(f"grano_grafito: {len(items)} tiras ({nl} lápiz, {len(items) - nl} carbón), {size / 1024:.0f} KB")
+    if items:
+        planes = [it["planes"][0][:600] for it in items[:16]]
+        Wt = sum(p.shape[1] + 6 for p in planes); Ht = max(p.shape[0] for p in planes)
+        sheet_im = Image.new("L", (Wt, Ht), 255); x = 0
+        for p in planes:
+            sheet_im.paste(Image.fromarray(255 - p), (x, 0)); x += p.shape[1] + 6
+        sheet_im.save(os.path.join(DBG, "grano_grafito.jpg"), quality=85)
+
+
 if __name__ == "__main__":
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
     if only in (None, "pin"): build_pinceladas()
     if only in (None, "manchas"): build_manchas()
     if only in (None, "tiles"): build_tiles()
     if only in (None, "ov"): build_overlays()
+    if only in (None, "grano"): build_grano()

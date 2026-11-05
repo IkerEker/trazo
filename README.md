@@ -128,7 +128,7 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 | Técnica | 5 MP (3000×1688) |
 |---|---|
 | Óleo | 11,8 s |
-| Lápiz | 3,3 s |
+| Lápiz | 5,6 s |
 | Gouache | 9,5 s (Diluido 13,3 s) |
 | Acuarela | 7,8 s (Con dibujo 8,8 s) |
 | Ceras | 11,6 s |
@@ -210,19 +210,23 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      y el pastel graso son cubrientes, con arrastre de color. Todas usan los trazos reales de
      `TEXTURES/TRAZOS/CERAS` (Manley también los de cera escolar) con su variación de tono interna,
      **planos**: solo ~1 % de los trazos lleva pasta, y nunca en las zonas importantes.
-4. **Lápiz** (`lapiz.js`), a la manera del efecto «Lápiz» de Word / Office:
-   - **Tono fiel**: el tono es el de la foto (los oscuros son oscuros, las luces son papel), con el
-     contraste local algo realzado para que los bordes queden nítidos **sin contornos negros**.
-   - **Garabato de grafito**: encima, miles de trazos finos de lápiz reales (`pin_lapiz`) en muchas
-     direcciones (unos siguen la forma de la foto y otros van sueltos), de largos, anchos, presiones
-     y curvas distintos. Hacen vibrar el tono: se ven mucho en los medios tonos, apenas en las luces,
-     y en las sombras dejan huecos más claros.
-   - **Papel**: el grafito se queda en los picos del grano, nunca llega al negro y brilla donde está
-     muy cargado. Se evita lo que delata un filtro barato: contornos gruesos, ruido granulado,
-     blancos quemados y rayado mecánico de una sola dirección.
-   - Variantes: **Línea suelta** (tono ligero y líneas sueltas de dibujante), **Rayado** (tono
-     completo), **Carboncillo** (barras de carbón difuminadas, negro mate) y **Negros expresivos**.
-   - La mixta lápiz + gouache y la acuarela con dibujo usan las líneas de `sketch.js` (Lu et al. 2012).
+4. **Lápiz** (`lapiz.js`), como dibuja una persona a mano:
+   - **Garabatos que siguen el volumen**: el tono se construye con grupos de líneas casi paralelas
+     (de ida y vuelta, a veces con la vuelta en bucle) que **rodean las formas**: su dirección sale
+     de la estructura de la foto y se propaga a las zonas lisas. En las texturas sin forma (follaje,
+     tela, madera) se raya en la dirección de la mano, sin remolinos.
+   - **Cada línea es una lente**: entra fina, aprieta en el centro y sale fina; su presión sigue al
+     tono de la foto que tiene debajo (se aligera al pasar por una luz). Las capas van de claro a
+     oscuro y en las sombras se cruzan con ángulos algo distintos. Un garabato solo se dibuja si a lo
+     largo de su recorrido todavía falta tono. Debajo hay un tono suave de grafito difuminado.
+   - **Grano real**: el del grafito y el carbón de los escaneos (`TEXTURES/TRAZOS/LAPIZ` →
+     `grano_grafito.bin`, a lo largo de cada línea) junto con el diente del papel. Con poca presión el
+     grafito solo agarra en los picos; con mucha, la línea es casi llena.
+   - **Contornos**: muy pocos, finísimos y rotos, solo en los bordes más marcados y en los rasgos.
+   - El fondo poco importante se deja algo más claro y suelto. Nunca negro puro; el grafito cargado
+     brilla, el carbón es mate.
+   - Variantes: **Línea suelta**, **Rayado**, **Carboncillo** (barras anchas, difuminado) y **Negros
+     expresivos**. La mixta lápiz + gouache y la acuarela con dibujo usan las líneas de `sketch.js`.
 5. **Acuarela** (`watercolor2.js`): de dos a cuatro aguadas según lo oscura que sea cada
    mancha. Las primeras, húmedas, tienen bordes suaves, flecos y floraciones, y sus colores
    se funden en los bordes. Las últimas, en seco, tienen bordes nítidos. Al secar, el
@@ -275,7 +279,7 @@ engine/              ← código fuente del motor (módulos)
   xilografia.js      ← cortes de gubia, estampación y planchas de color
   mixta.js           ← mixta lápiz + gouache
   kit.js             ← texturas repetibles, manchas, paleta, composición y grano del papel
-  lapiz.js           ← Lápiz (tono fiel + garabato de grafito real, como el efecto de Word)
+  lapiz.js           ← Lápiz (garabatos que siguen el volumen, grano real del grafito)
   sketch.js          ← líneas de lápiz para la mixta y la acuarela con dibujo (Lu et al. 2012)
   watercolor.js      ← Acuarela
   paper.js           ← papel y lienzo

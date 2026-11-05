@@ -40,7 +40,7 @@ const ASSETS_FOR = {
   oleo: ["pin_oleo", "pin_gouache", "manchas", "tiles_pintura"],
   gouache: ["pin_guache", "manchas", "tiles_pintura", "pin_acuarela", "tiles_acuarela"],
   acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz", "ov_goteos"],
-  lapiz: ["pin_lapiz", "pin_cera", "ov_grafito", "ov_carbon"],
+  lapiz: ["grano_grafito", "pin_lapiz", "pin_cera", "ov_carbon"],
   ceras: ["pin_barra", "pin_manley", "pin_pastel"],
   mixtalg: ["pin_lapiz", "pin_guache", "manchas"],
   xilografia: ["ov_madera", "ov_impresion"],
@@ -54,7 +54,9 @@ const DETAIL = { oleo: [0.25, 0.7], gouache: [0.25, 0.7], acuarela: [0.3, 0.6], 
 
 function flowOptions(tech, p) {
   switch (tech) {
-    case "lapiz": case "mixtalg": return { flowSigma: 8 + p.grosor * 8, baseAngle: -Math.PI / 4, wander: 0.2, bias: 0.15, localBias: 0.35 };
+    // lápiz: dirección muy suave que rodea las formas y se propaga a las zonas lisas
+    case "lapiz": return { flowSigma: 20 + p.grosor * 12, baseAngle: -Math.PI * 0.3, wander: 0.12, bias: 0.1, localBias: 1.6, propagate: true, textureHand: true };
+    case "mixtalg": return { flowSigma: 8 + p.grosor * 8, baseAngle: -Math.PI / 4, wander: 0.2, bias: 0.15, localBias: 0.35 };
     case "acuarela": return { flowSigma: 6 + p.grosor * 14, baseAngle: 0, wander: 0.6, bias: 0.1, localBias: 0.1 };
     case "ceras": return { flowSigma: 6 + p.grosor * 12, baseAngle: -Math.PI / 4, wander: 0.15, bias: 0.1, localBias: 0.12, propagate: true };
     case "xilografia": return { flowSigma: 6 + p.grosor * 10, baseAngle: 0, wander: 0.3, bias: 0.1, localBias: 0.15 };
