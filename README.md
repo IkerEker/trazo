@@ -128,7 +128,7 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 | Técnica | 5 MP (3000×1688) |
 |---|---|
 | Óleo | 11,8 s |
-| Lápiz | 5,6 s |
+| Lápiz | 4,9 s |
 | Gouache | 9,5 s (Diluido 13,3 s) |
 | Acuarela | 7,8 s (Con dibujo 8,8 s) |
 | Ceras | 11,6 s |
@@ -222,6 +222,11 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
    - **Grano real**: el del grafito y el carbón de los escaneos (`TEXTURES/TRAZOS/LAPIZ` →
      `grano_grafito.bin`, a lo largo de cada línea) junto con el diente del papel. Con poca presión el
      grafito solo agarra en los picos; con mucha, la línea es casi llena.
+   - **Detalle fino encima**: sobre los garabatos, líneas más finas y cortas que siguen la dirección
+     fina de la foto dibujan los rasgos (ojos, labios, nariz, mechones), sobre todo en lo importante.
+     Donde el dibujo quedó más oscuro que la foto (luces dentro de lo oscuro), una goma saca el grafito.
+   - **Escala de valores adaptada al motivo**: se estira el rango de la foto y se comprime el tono a
+     gran escala, así una cara oscura se dibuja en medios tonos y los negros quedan para lo más hondo.
    - **Contornos**: muy pocos, finísimos y rotos, solo en los bordes más marcados y en los rasgos.
    - El fondo poco importante se deja algo más claro y suelto. Nunca negro puro; el grafito cargado
      brilla, el carbón es mate.

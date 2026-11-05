@@ -50,8 +50,8 @@ function dtFilter1(I0, w, h, sigmaS, sigmaR, iters) {
 function config(p) {
   const m = p.modo;
   const c = {
-    lwK: 0.0032 + 0.0042 * p.grosor,       // ancho de la línea (fracción del lado largo)
-    lenK: 0.06 + 0.13 * p.longitud,        // largo de cada garabato (fracción del lado largo)
+    lwK: 0.0024 + 0.0032 * p.grosor,       // ancho de la línea (fracción del lado largo)
+    lenK: 0.045 + 0.1 * p.longitud,        // largo de cada garabato (fracción del lado largo)
     kappa: 0.5 + 0.18 * p.intensidad,      // oscuridad de una pasada firme
     // capas: desde qué tono empiezan, hasta qué oscuridad llegan y cuánto giran
     levels: [
@@ -63,11 +63,11 @@ function config(p) {
     ],
     crossK: 0.35 + 0.9 * p.cruzado, curvK: 0.12 + 0.4 * p.curvatura, hook: 0.45,
     edgeP: 0.12 + 0.25 * p.detalle, edgeThr: 0.5, focusK: 0.38, edgeLW: 0.22, edgePr: 0.42,
-    base: 0.32, lc: 0.6, gamma: 0.92, dMax: 0.9, charcoal: false, smudge: 0, white: 0.03, detailK: 0.6,
+    base: 0.26, lc: 0.6, lcFine: 1.1, comp: 0.84, adapt: 0.38, fineK: 1, gamma: 0.92, dMax: 0.9, charcoal: false, smudge: 0, white: 0.03, detailK: 0.6,
   };
-  if (m === "linea") Object.assign(c, { base: 0.2, levels: c.levels.slice(0, 3).map((l, i) => Object.assign({}, l, { cap: [0.22, 0.36, 0.48][i] })), edgeP: 0.55 + 0.4 * p.detalle, edgeThr: 0.3, edgePr: 0.55, lenK: c.lenK * 1.15, hook: 0.25 });
-  if (m === "carbon") Object.assign(c, { base: 0.4, lwK: c.lwK * 2.2, lenK: c.lenK * 1.1, kappa: 0.66 + 0.15 * p.intensidad, charcoal: true, smudge: 0.5, dMax: 0.97, edgeLW: 0.35, edgePr: 0.5, gamma: 0.9, hook: 0.3 });
-  if (m === "negros") Object.assign(c, { kappa: c.kappa + 0.08, gamma: 0.85, lc: 0.8, crossK: c.crossK * 1.25, levels: c.levels.map((l) => Object.assign({}, l, { cap: Math.min(0.95, l.cap + 0.06) })).concat([{ t: 0.82, cap: 0.93, rot: 1.05 }]) });
+  if (m === "linea") Object.assign(c, { base: 0.16, fineK: 0.7, levels: c.levels.slice(0, 3).map((l, i) => Object.assign({}, l, { cap: [0.22, 0.36, 0.48][i] })), edgeP: 0.55 + 0.4 * p.detalle, edgeThr: 0.3, edgePr: 0.55, lenK: c.lenK * 1.15, hook: 0.25 });
+  if (m === "carbon") Object.assign(c, { base: 0.36, fineK: 0.8, lwK: c.lwK * 2.2, lenK: c.lenK * 1.1, kappa: 0.66 + 0.15 * p.intensidad, charcoal: true, smudge: 0.5, dMax: 0.97, edgeLW: 0.35, edgePr: 0.5, gamma: 0.9, hook: 0.3 });
+  if (m === "negros") Object.assign(c, { adapt: 0.25, kappa: c.kappa + 0.08, gamma: 0.85, lc: 0.8, crossK: c.crossK * 1.25, levels: c.levels.map((l) => Object.assign({}, l, { cap: Math.min(0.95, l.cap + 0.06) })).concat([{ t: 0.82, cap: 0.93, rot: 1.05 }]) });
   // realismo: alto = más capas finas, trazos más cortos y más contornos; bajo = garabato grande y suelto
   const d = (p.realismo === undefined ? 0.5 : p.realismo) - 0.5;
   c.lenK *= 1 - d * 0.7;
@@ -75,6 +75,7 @@ function config(p) {
   c.simp = C.clamp(0.3 - d * 0.8, 0, 0.8);
   c.detailK *= 1 + d;
   c.fine = d > -0.2;                 // pasada final de detalle
+  c.fineK *= C.clamp(1 + d * 1.2, 0.3, 1.6);
   c.edgeP *= 1 + d * 0.8;
   c.focusK *= 1 - d * 0.8;
   return c;
@@ -98,31 +99,53 @@ async function paint(ctx, p, clock, seg, Lfull) {
     for (let i = 0; i < Iw.length; i++) Iw[i] += (Is[i] - Iw[i]) * cfg.simp;
   }
   await clock.tick(0.05);
+  // como un dibujante: la escala de valores se adapta al motivo. Se estira el rango de la
+  // foto y se comprime el tono a gran escala (una cara oscura no se dibuja negra: se dibuja
+  // en medios tonos y se reservan los negros para lo más hondo), sin tocar el detalle local
+  {
+    const lo = C.percentile(Iw, 0.01), hi = C.percentile(Iw, 0.995);
+    const k = 1 / Math.max(0.15, hi - lo);
+    for (let i = 0; i < Iw.length; i++) Iw[i] = C.clamp((Iw[i] - lo) * k, 0, 1);
+    const BL = Float32Array.from(Iw), tmp = new Float32Array(BL.length);
+    C.gaussBlur(BL, ww, wh, Math.max(4, 0.045 * Math.max(ww, wh)), tmp);
+    for (let i = 0; i < Iw.length; i++) Iw[i] = C.clamp(Iw[i] + (0.6 - BL[i]) * cfg.adapt, 0, 1);
+  }
   // contraste local (los volúmenes se leen mejor) y curva de un dibujo a lápiz
   const B = Float32Array.from(Iw);
   { const tmp = new Float32Array(B.length); C.gaussBlur(B, ww, wh, Math.max(2, 9 * Math.max(ww, wh) / 1000), tmp); }
+  const Bs = Float32Array.from(Iw);
+  { const tmp = new Float32Array(Bs.length); C.gaussBlur(Bs, ww, wh, Math.max(1, 2.2 * Math.max(ww, wh) / 1000), tmp); }
   const lift = (1 - p.cobertura) * 0.35;
-  const Tw = new Float32Array(ww * wh);
-  for (let i = 0; i < Tw.length; i++) {
-    const v = Iw[i] + (Iw[i] - B[i]) * cfg.lc;
+  const Tw = new Float32Array(ww * wh), Tdw = new Float32Array(ww * wh);
+  const toneOf = (v) => {
     let d = 1 - (v < 0 ? 0 : v > 1 ? 1 : v);
     d = C.smoothstep(cfg.white, 0.97, d);
-    d = Math.pow(d, cfg.gamma);
-    Tw[i] = Math.max(0, (d - lift) / (1 - lift));
+    d = Math.pow(d, cfg.gamma) * cfg.comp;              // los oscuros no se cierran del todo
+    return Math.max(0, (d - lift) / (1 - lift));
+  };
+  for (let i = 0; i < Tw.length; i++) {
+    // tono principal: volúmenes (contraste local medio), sin el detalle fino
+    Tw[i] = toneOf(Bs[i] + (Bs[i] - B[i]) * cfg.lc);
+    // tono de detalle: rasgos y bordes finos realzados (ojos, labios, nariz, mechones)
+    Tdw[i] = toneOf(Iw[i] + (Iw[i] - B[i]) * cfg.lc + (Iw[i] - Bs[i]) * cfg.lcFine);
   }
   if (seg && cfg.focusK > 0) {
     // el fondo (lo poco importante) se deja más claro y suelto; el tono fuerte va al motivo
     for (let y = 0; y < wh; y++) for (let x = 0; x < ww; x++) {
       const im = ctx.at(seg.imp, (x + 0.5) * W / ww - 0.5, (y + 0.5) * H / wh - 0.5);
       const k = cfg.focusK * Math.pow(1 - C.clamp(im, 0, 1), 1.4);
-      Tw[y * ww + x] *= 1 - k;
+      Tw[y * ww + x] *= 1 - k; Tdw[y * ww + x] *= 1 - k;
     }
   }
   // a resolución completa (se consulta en cada píxel de cada trazo)
-  const Tf = new Uint8Array(N);
+  const Tf = new Uint8Array(N), Td = new Uint8Array(N);
   for (let y = 0; y < H; y++) {
     const ay = (y + 0.5) * wh / H - 0.5;
-    for (let x = 0; x < W; x++) Tf[y * W + x] = (C.bilinear(Tw, ww, wh, (x + 0.5) * ww / W - 0.5, ay) * 255 + 0.5) | 0;
+    for (let x = 0; x < W; x++) {
+      const axx = (x + 0.5) * ww / W - 0.5;
+      Tf[y * W + x] = (C.bilinear(Tw, ww, wh, axx, ay) * 255 + 0.5) | 0;
+      Td[y * W + x] = (C.clamp(C.bilinear(Tdw, ww, wh, axx, ay), 0, 1) * 255 + 0.5) | 0;
+    }
     if ((y & 63) === 0) await clock.tick(0.05 + 0.05 * y / H);
   }
 
@@ -157,6 +180,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
   const raster = new S.StrokeRaster(W, H);
   const path = new S.StrokePath();
   const kap = cfg.kappa;
+  let TT = Tf, flowFine = false;     // tono que siguen los trazos y campo de direcciones (fino o suave)
   function drawLine(xs, ys, n, lw, pBase, tk, tcap) {
     if (n < 2) return;
     path.n = n;
@@ -185,7 +209,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
       // la presión: entra suave, aprieta en el centro, sale suave; menos en los bordes de la línea
       let pr = pBase * (0.22 + 0.78 * Math.pow(Math.sin(Math.PI * uc), 0.7)) * (1 - 0.45 * v * v) * pv0 * A[li];
       // y sigue al tono de debajo: más presión donde la foto es más oscura (dentro de esta capa)
-      const tv = Tf[g] / 255;
+      const tv = TT[g] / 255;
       if (tv <= tkLo) continue;
       const fT = (tv - tkLo) * tInv;
       pr *= fT >= 1 ? 1 : Math.pow(fT, 0.85);
@@ -220,14 +244,14 @@ async function paint(ctx, p, clock, seg, Lfull) {
     const ca = Math.cos(rot), sa = Math.sin(rot);
     let nf = 0, nb = 0;
     for (const sign of [1, -1]) {
-      ctx.flowAt(x0, y0, f, false);
+      ctx.flowAt(x0, y0, f, flowFine);
       let dx = f[0] * ca - f[1] * sa, dy = f[0] * sa + f[1] * ca;
       if (sign < 0) { dx = -dx; dy = -dy; }
       let x = x0, y = y0, len = 0, k = 0;
       const ox = sign > 0 ? clx : bx, oy = sign > 0 ? cly : by;
       const budget = L * 0.5;
       while (len < budget && k < 2000) {
-        ctx.flowAt(x, y, f, false);
+        ctx.flowAt(x, y, f, flowFine);
         let fx = f[0] * ca - f[1] * sa, fy = f[0] * sa + f[1] * ca;
         if (fx * dx + fy * dy < 0) { fx = -fx; fy = -fy; }
         let nx = dx + (fx - dx) * cfg.curvK, ny = dy + (fy - dy) * cfg.curvK;
@@ -263,7 +287,7 @@ async function paint(ctx, p, clock, seg, Lfull) {
       let def = 0, cnt = 0;
       for (let i = 0; i < n; i += Math.max(1, (n / 9) | 0)) {
         const xi = C.clamp(clx[i] | 0, 0, W - 1), yi = C.clamp(cly[i] | 0, 0, H - 1), g = yi * W + xi;
-        const tv = Tf[g] / 255;
+        const tv = TT[g] / 255;
         def += Math.min(tv, tcap) - (1 - Tr[g]); cnt++;
       }
       if (def / cnt < 0.06) return false;
@@ -334,21 +358,57 @@ async function paint(ctx, p, clock, seg, Lfull) {
     }
   }
 
-  /* --- 6) repaso de detalle: trazos cortos donde aún falta tono --- */
+  /* --- 6) detalle fino ENCIMA: líneas finas y cortas que dibujan los rasgos ---
+   * Sigue el tono de detalle (rasgos realzados) y el campo de direcciones fino; se
+   * concentra donde la foto tiene detalle y en lo importante. Donde el dibujo quedó
+   * más oscuro que la foto (luces dentro de lo oscuro), una goma saca el grafito. */
   if (cfg.fine) {
-    const sp = Math.max(lw0p * 2.5, L0 * 0.14);
+    TT = Td; flowFine = true;
+    const lwF = Math.max(1, lw0p * 0.45), LF = L0 * 0.32;
+    const sp = Math.max(lwF * 3.2, LF * 0.34);
     const cols = Math.ceil(W / sp), rows = Math.ceil(H / sp);
-    for (let gy = 0; gy < rows; gy++) {
-      for (let gx = 0; gx < cols; gx++) {
-        const x = Math.min(W - 1, (gx + rand()) * sp), y = Math.min(H - 1, (gy + rand()) * sp);
-        const Tc = Tf[(y | 0) * W + (x | 0)] / 255;
-        const e = Tc - dAt(x, y);
-        if (e < 0.12) continue;
-        const lw = lw0p * 0.75;
-        scribble(x, y, L0 * 0.3 * (0.7 + 0.6 * rand()), lw, lw * 1.6, 2 + ((rand() * 3) | 0), 0.9, Math.max(0, Tc - 0.3), gauss() * 0.3, false, Tc);
+    const erase = [];
+    for (let pass = 0; pass < 2; pass++) {
+      for (let gy = 0; gy < rows; gy++) {
+        for (let gx = 0; gx < cols; gx++) {
+          const x = Math.min(W - 1, (gx + rand()) * sp), y = Math.min(H - 1, (gy + rand()) * sp);
+          const ed = ctx.at(ctx.edgeRaw, x, y), im = seg ? ctx.at(seg.imp, x, y) : 0.5;
+          // el detalle fino va a lo importante; en el fondo apenas (sin rizos en el follaje)
+          const want = cfg.fineK * (0.06 + 0.9 * ed * C.smoothstep(0.25, 0.7, im) + 0.4 * im);
+          if (rand() > want) continue;
+          const g = (y | 0) * W + (x | 0);
+          const tD = Td[g] / 255, cur = 1 - Tr[g];
+          if (tD - cur > 0.07) {
+            scribble(x, y, LF * (0.6 + 0.8 * rand()), lwF * (0.8 + 0.4 * rand()), lwF * (1.3 + 0.8 * rand()), 2 + ((rand() * 4) | 0),
+              0.95, Math.max(0, tD - 0.4), gauss() * 0.12, false, tD);
+          } else if (pass === 0 && cur - tD > 0.16) erase.push(x, y, cur - tD);
+        }
+        if ((gy & 15) === 0) await clock.tick(0.8 + 0.03 * (pass + gy / rows));
       }
-      if ((gy & 15) === 0) await clock.tick(0.8 + 0.05 * gy / rows);
     }
+    // goma: trazos cortos que levantan grafito hacia el tono de la foto (con grano: el papel retiene algo)
+    for (let e = 0; e < erase.length; e += 3) {
+      const x0 = erase[e], y0 = erase[e + 1];
+      const n = centerLine(x0, y0, LF * (0.4 + 0.5 * rand()), Math.max(1.2, lwF), gauss() * 0.1);
+      if (n < 2) continue;
+      for (let i = 0; i < n; i++) { path.xs[i] = clx[i]; path.ys[i] = cly[i]; path.rs[i] = lwF * (0.6 + 0.5 * rand()); }
+      path.n = n;
+      let sl = 0; path.ss[0] = 0;
+      for (let i = 1; i < n; i++) { sl += Math.hypot(path.xs[i] - path.xs[i - 1], path.ys[i] - path.ys[i - 1]); path.ss[i] = sl; }
+      path.len = sl;
+      const nt = raster.rasterize(path, 0.4);
+      const A = raster.A, U = raster.U, tl = raster.tl, tg = raster.tg;
+      for (let t = 0; t < nt; t++) {
+        const g = tg[t];
+        const uc = Math.min(1, Math.max(0, U[tl[t]]));
+        const cur = 1 - Tr[g], tD = Td[g] / 255;
+        if (cur <= tD) continue;
+        const k = A[tl[t]] * (0.35 + 0.65 * Math.sin(Math.PI * uc)) * (0.45 + 0.55 * tooth[g] / 255) * 0.85;
+        Tr[g] = 1 - (cur - (cur - tD) * k);
+      }
+      raster.clear();
+    }
+    TT = Tf; flowFine = false;
   }
 
   /* --- 7) contornos: muy pocos, finísimos y rotos --- */
