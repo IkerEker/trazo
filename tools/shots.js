@@ -15,8 +15,7 @@ const query = process.argv[5] || "img=faro";
     await page.goto(`http://localhost:8765/plugin/index.html?${query}`);
     await page.waitForFunction(() => window.__loaded === true, null, { timeout: 15000 });
     if (tab) await page.click("#tab-" + tab);
-    await page.waitForFunction(() => /vista previa en/.test(document.getElementById("pvStatus").textContent) || /oculta/.test(document.getElementById("pvStatus").textContent), null, { timeout: 30000 }).catch(() => errors.push(`${w}x${h}: la vista previa no terminó`));
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(300);
     await page.screenshot({ path: `${out}/panel_${w}x${h}${tab ? "_" + tab : ""}.png` });
     // ¿algún elemento se sale horizontalmente?
     const overflow = await page.evaluate(() => {

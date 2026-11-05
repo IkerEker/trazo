@@ -8,7 +8,8 @@
  *       selection: { mask, mode: "solo"|"detalle" } | null,
  *       paper: true,                         // capa de papel visible
  *       assets: { pin_oleo: <parseTexture>, tiles_pintura: ..., ... },
- *       support: <parseTexture soporte-*> },
+ *       support: <parseTexture soporte-*>,
+ *       colors: { fg: {r,g,b}, bg: {r,g,b} } }    // colores de Photoshop (0..1), opcional
  *     { onProgress(f, texto), shouldCancel(), sliceMs }
  *   );
  *   // res = { paint: RGBA, paper: RGBA | null, width, height }
@@ -21,6 +22,7 @@ const { Context } = require("./analysis.js");
 const T = require("./techniques.js");
 const Painter = require("./painter.js");
 const Pencil = require("./sketch.js");
+const Lapiz = require("./lapiz.js");
 const Paper = require("./paper.js");
 const Lib = require("./library.js");
 const Seg = require("./segment.js");
@@ -78,6 +80,7 @@ async function render(input, opts, hooks) {
   ctx.strokesOf = (names) => strokesOf(assets, names);
   ctx.paperPrep = opts.support ? Lib.preparePaper(opts.support) : null;
   ctx.physMM = Lib.physMM(tech); // escala física del soporte (trama, grano)
+  ctx.colors = opts.colors || null; // colores frontal y de fondo de Photoshop
   // biblioteca de pinceladas principal de la técnica
   const mainLib = { oleo: ["pin_gouache", "pin_oleo"], gouache: ["pin_guache"], acuarela: ["pin_acuarela"], lapiz: ["pin_lapiz"], ceras: ["pin_barra"], mixtalg: ["pin_guache"], xilografia: [] }[tech];
   ctx.lib = strokesOf(assets, mainLib) || (opts.library && opts.library.kind === "strokes" ? opts.library : null);
@@ -103,7 +106,7 @@ async function render(input, opts, hooks) {
   let paint;
   if (tech === "lapiz") {
     clock.stage(0.25, end, "Dibujando");
-    paint = await Pencil.paint(ctx, p, clock, seg, Lfull);
+    paint = await Lapiz.paint(ctx, p, clock, seg, Lfull);
   } else if (tech === "acuarela") {
     if (p.modo === "dibujo") {
       clock.stage(0.25, 0.45, "Dibujo a lápiz");

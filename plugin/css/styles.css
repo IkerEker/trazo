@@ -297,18 +297,11 @@ html, body {
 .progress-fill { height: 3px; width: 0; background-color: var(--green); border-radius: 2px; }
 
 /* ---------- panel ancho: vista previa a la izquierda ---------- */
+/* sin vista previa: una sola columna; en paneles anchos los controles no se estiran de más */
 @media (min-width: 620px) {
-  .app { flex-direction: row; }
-  .col-preview { flex: 1 1 auto; border-right: 1px solid var(--line); }
-  .col-preview .preview { flex: 1 1 auto; min-height: 0; padding-bottom: 12px; }
-  .col-preview .pv-frame { flex: 1 1 auto; }
-  .col-controls { flex: 0 0 330px; width: 330px; }
-  .tabs { margin-top: 12px; }
-  #pvToggle { display: none; }
+  .col-preview, .col-controls { width: 100%; max-width: 560px; }
 }
-@media (min-width: 900px) {
-  .col-controls { flex: 0 0 370px; width: 370px; }
-}
+
 
 /* ---------- panel muy estrecho ---------- */
 @media (max-width: 285px) {

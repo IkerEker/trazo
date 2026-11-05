@@ -12,14 +12,13 @@ const out = process.argv[2] || ".";
   await page.addInitScript(() => { try { localStorage.clear(); } catch (e) {} });
   await page.goto("http://localhost:8765/plugin/index.html?img=retrato&scale=3");
   await page.waitForFunction(() => window.__loaded === true);
-  const waitPreview = () => page.waitForFunction(() => /vista previa en/.test(document.getElementById("pvStatus").textContent), null, { timeout: 30000 });
-  await waitPreview();
   const ok = (c, m) => { if (!c) errors.push("FALLO: " + m); else console.log("OK  " + m); };
 
   // 1) cambiar a Acuarela
+  ok((await page.evaluate(() => document.querySelectorAll("#preview, #pvImg, #pvStatus").length)) === 0, "sin vista previa en el panel");
+  ok(/retrato/.test(await page.evaluate(() => document.getElementById("srcLabel").textContent)), "la cabecera muestra la imagen activa");
   await page.click("#techs .tech:nth-child(4)");
-  await page.waitForFunction(() => /Acuarela · vista previa/.test(document.getElementById("pvStatus").textContent), null, { timeout: 30000 });
-  ok(await page.$eval("#techs .tech:nth-child(4)", (e) => e.classList.contains("on")), "cambio de técnica a Acuarela y vista previa");
+  ok(await page.$eval("#techs .tech:nth-child(4)", (e) => e.classList.contains("on")), "cambio de técnica a Acuarela");
   ok((await page.$$("#techs .tech")).length === 7, "7 técnicas");
   ok((await page.$$("#quickSliders .sl")).length >= 1, "Realismo en la primera pantalla");
 
@@ -33,8 +32,7 @@ const out = process.argv[2] || ".";
   await page.mouse.up();
   const vals = await page.$$eval("#sliders .sl-val", (els) => els.map((e) => e.textContent));
   ok(vals[1] === "80", "arrastre del slider de grosor = 80 (" + vals.join(",") + ")");
-  await page.waitForTimeout(500);
-  await waitPreview();
+  await page.waitForTimeout(600);
 
   // 3) doble clic = valor por defecto
   await page.mouse.click(box.x + 5, box.y + box.height / 2);
@@ -59,8 +57,7 @@ const out = process.argv[2] || ".";
   ok(await page.$eval("#sliders .chips .chip:nth-child(3)", (e) => e.classList.contains("on")), "la variante Carboncillo queda marcada en Ajustes");
   await page.click("#sliders .chips .chip:nth-child(4)");
   ok(await page.$eval("#sliders .chips .chip:nth-child(4)", (e) => e.classList.contains("on")), "cambiar de variante en Ajustes");
-  await page.waitForTimeout(500);
-  await waitPreview();
+  await page.waitForTimeout(200);
   await page.screenshot({ path: out + "/flow_lapiz_color.png" });
 
   // 6) GENERAR

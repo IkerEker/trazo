@@ -60,6 +60,7 @@ async function paint(ctx, p, seg, Lfull, clock) {
   let inks = [], regInk = null;
   if (color) {
     const nInk = mode === "dos" ? 1 : 2;
+    // (las tintas automáticas salen de la imagen; si hay color frontal en Photoshop, manda ese)
     const pal = K.palette(ctx, 5, ctx.seed, { skip: (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b) < 0.12 || (r + g + b) / 3 > 0.9 || (r + g + b) / 3 < 0.15 });
     const cands = [];
     for (let k = 0; k < pal.K; k++) {
@@ -77,6 +78,33 @@ async function paint(ctx, p, seg, Lfull, clock) {
     }
     if (!inks.length) inks.push({ r: 0.86, g: 0.33, b: 0.2 });
     if (inks.length < nInk) inks.push({ r: 0.96, g: 0.78, b: 0.25 });
+    // tintas elegidas por el usuario: el color frontal de Photoshop (y el de fondo en tres tintas)
+    const usable = (c) => {
+      if (!c) return false;
+      const l = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b, sat = Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
+      return l < 0.95 && (l > 0.12 || sat > 0.15) && !(sat < 0.04 && l < 0.25);
+    };
+    const userCols = ctx.colors || {};
+    let byLum = false;
+    if (usable(userCols.fg)) {
+      const auto = inks.slice();
+      inks = [{ r: userCols.fg.r, g: userCols.fg.g, b: userCols.fg.b }];
+      byLum = true;
+      if (nInk > 1) {
+        const fg = inks[0];
+        const bgOk = usable(userCols.bg) && Math.abs(userCols.bg.r - fg.r) + Math.abs(userCols.bg.g - fg.g) + Math.abs(userCols.bg.b - fg.b) > 0.3;
+        if (bgOk) inks.push({ r: userCols.bg.r, g: userCols.bg.g, b: userCols.bg.b });
+        else {
+          // segunda tinta: la de la imagen más distinta del color frontal
+          let best = auto[0], bd = -1;
+          for (const c of auto) { const d = Math.abs(c.r - fg.r) + Math.abs(c.g - fg.g) + Math.abs(c.b - fg.b); if (d > bd) { bd = d; best = c; } }
+          inks.push(best);
+        }
+      }
+    }
+    // tintas del usuario: cada zona va a la tinta según su valor (las claras a la tinta clara)
+    let lumOrder = null;
+    if (byLum && inks.length > 1) lumOrder = inks.map((c, k) => [0.299 * c.r + 0.587 * c.g + 0.114 * c.b, k]).sort((a, b) => b[0] - a[0]).map((v) => v[1]);
     // cada zona: papel, o la tinta más parecida a su color
     regInk = new Int8Array(reg.n).fill(-1);
     for (let r = 0; r < reg.n; r++) {
@@ -84,7 +112,8 @@ async function paint(ctx, p, seg, Lfull, clock) {
       const l = reg.lum[r];
       if (l > 0.86) continue;
       let best = 0, bd = 1e9;
-      for (let k = 0; k < inks.length; k++) {
+      if (lumOrder) best = lumOrder[l > 0.55 ? 0 : 1];
+      else for (let k = 0; k < inks.length; k++) {
         const ik = inks[k];
         const d = Math.abs(ik.r - mr) + Math.abs(ik.g - mg) + Math.abs(ik.b - mb);
         if (d < bd) { bd = d; best = k; }

@@ -121,7 +121,7 @@ function config(kind, p, s) {
       paperBreak: 0, chalk: false, libs: ["pin_oleo", "pin_gouache"], dirJit: 0.06, edgeN: 0.42, edgeT: 0.9, temp: 0.06, reliefK: 0.5,
       tools: null, hBlur: 1.6,
       sizeVar: 0.42, lenVar: 0.55, loadK: 0.55, shapes: 1.0, shapeOp: 0.8, shapeSkip: 0.6, tileAmt: 0.7,
-      dirt: 0.28, groundTint: 0.16, finalPass: 0.6, matte: 0,
+      dirt: 0.28, groundTint: 0.16, finalPass: 0.6, matte: 0, bristle: 1,
     };
     // gestual: el punto de partida que funciona (decidido, abstracto)
     if (m === "gestual") Object.assign(c, { dirt: 0.38, finalPass: 1.0, R0: c.R0 * 1.3, Lk: c.Lk * 1.45, curv: Math.min(1, c.curv * 1.4 + 0.1), wet: 0.32, varK: 1.6, dual: 0.8, satK: 1.15, lost: 1.5, planeK: 0, layers: 2 + Math.round(p.detalle * 0.8), dirJit: 0.1 });
@@ -297,6 +297,9 @@ async function paint(ctx, kind, p, seg, clock) {
   const pal = cfg.palK ? K.palette(ctx, cfg.palN, ctx.seed, {}) : null;
   if (pal) for (let k = 0; k < pal.K; k++) { const l = 0.299 * pal.r[k] + 0.587 * pal.g[k] + 0.114 * pal.b[k]; pal.r[k] = C.clamp(l + (pal.r[k] - l) * 1.25, 0, 1); pal.g[k] = C.clamp(l + (pal.g[k] - l) * 1.25, 0, 1); pal.b[k] = C.clamp(l + (pal.b[k] - l) * 1.25, 0, 1); }
   const col = new Float32Array(3), col2 = new Float32Array(3), base = new Float32Array(3), tmp = new Float32Array(3), ts = new Float32Array(2);
+  const brs = new Float32Array(168);
+  // separación entre cerdas: ~0,7 mm en el tamaño físico supuesto del cuadro
+  const bristleSp = Math.max(1.6, 0.7 * Math.max(W, H) / (ctx.physMM || 600));
   const stripes = new Float32Array(64), jit = new Float32Array(66), tanX = new Float32Array(64), tanY = new Float32Array(64);
   const raster = new S.StrokeRaster(W, H);
   const path = new S.StrokePath();
@@ -575,6 +578,19 @@ async function paint(ctx, kind, p, seg, clock) {
     }
     // brillo de este trazo (más médium / más pasta = más brillo); el gouache y el pastel no brillan
     const gl8 = Math.min(255, (cfg.gloss > 0 ? (0.35 + 0.65 * rand()) * (0.6 + 0.4 * Math.min(1.5, thick / Math.max(0.05, cfg.thick))) : 0) * 200) | 0;
+    // cerdas a escala real (~0,7 mm): cada una lleva algo más o menos pintura y deja su surco
+    const bri = cfg.bristle || 0;
+    let nbr = 0;
+    if (bri > 0) {
+      nbr = Math.max(6, Math.min(160, Math.round(2 * R / bristleSp)));
+      let pb0 = rand();
+      for (let q = 0; q <= nbr + 1; q++) {
+        // grupos de cerdas (mechones) más un detalle fino por cerda
+        if (q % (3 + ((rand() * 5) | 0)) === 0) pb0 = rand();
+        brs[q] = pb0 * 0.6 + rand() * 0.4;
+      }
+    }
+    const drift = (rand() - 0.5) * 2.2, drift2 = rand() * 6.28;
     // carga del pincel: empieza cargado y se va quedando seco (unos trazos más que otros)
     const loadK = (cfg.loadK || 0) * (0.4 + 0.9 * rand());
     const dryU = 0.55 + 0.4 * rand();
@@ -627,9 +643,20 @@ async function paint(ctx, kind, p, seg, clock) {
       // al final del trazo queda menos pintura: se abre en vetas de cerdas y deja ver lo de debajo
       const uc = u < 0 ? 0 : u > 1 ? 1 : u;
       const load = 1 + loadK * (0.35 - uc);
+      let bval = 0.5, bgro = 0.5;
+      if (nbr) {
+        // posición sobre las cerdas (derivan un poco a lo largo del trazo)
+        const qf = (v + 1) * 0.5 * nbr + drift * Math.sin(uc * 3.1 + drift2);
+        const q0 = qf < 0 ? 0 : qf > nbr ? nbr : qf | 0, fq = qf - Math.floor(qf);
+        bval = brs[q0] + (brs[q0 + 1] - brs[q0]) * fq;
+        bgro = 0.5 + 0.5 * Math.cos(qf * 6.2832);
+        // filo deshilachado: las cerdas exteriores dejan menos pintura
+        const av = v < 0 ? -v : v;
+        if (av > 0.72) { a *= C.smoothstep(0.1, 0.55, bval + (0.95 - av) * 1.6); if (a < 0.004) continue; }
+      }
       if (loadK > 0 && uc > dryU) {
         const e = (uc - dryU) / (1 - dryU) * loadK * 1.4;
-        const bv = stripes[((v + 1) * 31.5) | 0];
+        const bv = nbr ? bval * 0.7 + stripes[((v + 1) * 31.5) | 0] * 0.3 : stripes[((v + 1) * 31.5) | 0];
         const sh = toothMap ? toothMap[g] * (1 / 255) : 0.5;
         a *= C.smoothstep(e - 0.35, e + 0.05, bv * 0.5 + sh * 0.38 + 0.12 * ts[0]);
         if (a < 0.004) continue;
@@ -640,7 +667,9 @@ async function paint(ctx, kind, p, seg, clock) {
       const mz = stripes[((v + 1) * 31.5) | 0] * mixAmt;
       // más carga = tono algo más hondo; menos carga = algo más claro
       const kl = 1 - 0.1 * (load - 1) * 2;
-      let br = (cr + (c2r - cr) * mz) * kl, bgc = (cg + (c2g - cg) * mz) * kl, bbc = (cb + (c2b - cb) * mz) * kl;
+      let kb = kl;
+      if (nbr) kb *= 1 + bri * (0.12 * (bval - 0.5) + 0.05 * (bgro - 0.5));   // vetas de cerdas
+      let br = (cr + (c2r - cr) * mz) * kb, bgc = (cg + (c2g - cg) * mz) * kb, bbc = (cb + (c2b - cb) * mz) * kb;
       // pincel sucio: al empezar arrastra algo del color de donde se apoyó (mezcla de pigmentos)
       if (dirt > 0 && uc < 0.4) { const kd = dirt * (1 - uc / 0.4); br = pmix(br, dr0, kd); bgc = pmix(bgc, dg0, kd); bbc = pmix(bbc, db0, kd); }
       let rr, gg, bb;
@@ -668,7 +697,8 @@ async function paint(ctx, kind, p, seg, clock) {
         // relieve de la pincelada: cuerpo, surcos de las cerdas y crestas en los bordes
         const av = v < 0 ? -v : v;
         const rg = ridge * C.smoothstep(0.5, 0.82, av) * (1 - C.smoothstep(0.86, 1, av));
-        Hh[g] = Hh[g] * (1 - a * 0.85) + a * thick * load * (0.45 + 0.55 * ts[0] + 0.35 * ts[1] * C.smoothstep(0.5, 0.95, ts[0]) + rg);
+        const grv = nbr ? bri * (0.22 * (bgro - 0.5) + 0.18 * (bval - 0.5)) * (1.25 - 0.4 * load) : 0;
+        Hh[g] = Hh[g] * (1 - a * 0.85) + a * thick * load * (0.45 + 0.55 * ts[0] + 0.35 * ts[1] * C.smoothstep(0.5, 0.95, ts[0]) + rg + grv);
       }
     }
     raster.clear();

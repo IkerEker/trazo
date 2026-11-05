@@ -2,7 +2,7 @@
   "manifestVersion": 5,
   "id": "com.trazo.pinturatradicional",
   "name": "Trazo",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "main": "index.html",
   "host": {
     "app": "PS",

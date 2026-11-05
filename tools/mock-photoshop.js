@@ -94,7 +94,12 @@
     hostControl: { async suspendHistory(o) { log.push(["suspendHistory", o.name]); return { id: 1 }; }, async resumeHistory(s, ok) { log.push(["resumeHistory", ok]); } },
   };
   const ps = {
-    app: { get activeDocument() { return noDoc ? null : doc; }, get documents() { return noDoc ? [] : [doc]; }, async createDocument() { throw new Error("no simulado"); } },
+    app: {
+      get activeDocument() { return noDoc ? null : doc; }, get documents() { return noDoc ? [] : [doc]; }, async createDocument() { throw new Error("no simulado"); },
+      // colores frontal y de fondo (se pueden cambiar con ?fg=rrggbb)
+      get foregroundColor() { const h = (new URLSearchParams(location.search).get("fg") || "1f5fa8"); return { rgb: { red: parseInt(h.slice(0, 2), 16), green: parseInt(h.slice(2, 4), 16), blue: parseInt(h.slice(4, 6), 16) } }; },
+      get backgroundColor() { return { rgb: { red: 255, green: 255, blue: 255 } }; },
+    },
     core: { async executeAsModal(fn, o) { log.push(["modal", o.commandName]); return fn(ctx); }, showAlert(m) { log.push(["alert", m]); } },
     action: { addNotificationListener(ev, fn) { window.__notify = fn; }, async batchPlay(cmds) { log.push(["batchPlay", JSON.stringify(cmds)]); return []; } },
     imaging,

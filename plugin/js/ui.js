@@ -1,6 +1,6 @@
 /*
  * Trazo · interfaz del panel
- * Pestañas, técnicas, sliders, presets, vista previa en vivo y GENERAR.
+ * Pestañas, técnicas, sliders, presets y GENERAR (sin vista previa: se pinta solo al generar).
  */
 (function () {
   "use strict";
@@ -10,8 +10,6 @@
   const $ = (id) => document.getElementById(id);
 
   const STORE_KEY = "trazo.state.v2";
-  const PREVIEW_MIN = 360, PREVIEW_MAX = 720;
-  let previewLong = 440; // se adapta al tamaño del marco
   const QUALITY = {
     borrador: { mp: 1.5, label: "Borrador", hint: "Rápido para probar (hasta 1,5 MP)." },
     alta: { mp: 6, label: "Alta", hint: "Buen equilibrio (hasta 6 MP)." },
@@ -43,7 +41,6 @@
     hideOriginal: true,
     seed: 1,
     tab: "tecnica",
-    previewCollapsed: false,
     userPresets: {},
     activePreset: {},
   };
@@ -66,7 +63,6 @@
         if (typeof s.hideOriginal === "boolean") state.hideOriginal = s.hideOriginal;
         if (s.seed > 0) state.seed = s.seed | 0;
         if (s.tab === "tecnica" || s.tab === "ajustes" || s.tab === "salida") state.tab = s.tab;
-        state.previewCollapsed = !!s.previewCollapsed;
         if (s.activePreset) state.activePreset = s.activePreset;
       }
     } catch (e) { /* almacenamiento no disponible */ }
@@ -204,7 +200,6 @@
     buildPresets();
     buildSliders();
     save();
-    schedulePreview(60);
   }
 
   /* ------------------------------------------------------------------ */
@@ -220,7 +215,6 @@
     buildPresets();
     buildSliders();
     save();
-    schedulePreview(30);
   }
   function buildPresets() {
     const box = $("presets");
@@ -287,7 +281,7 @@
     const vrow = el("div", "chips");
     for (const v of def.variants || []) {
       const c = el("div", "chip" + (cur().modo === v.id ? " on" : ""), v.name);
-      onTap(c, () => { cur().modo = v.id; state.activePreset[state.tech] = null; save(); buildSliders(); buildPresets(); schedulePreview(30); });
+      onTap(c, () => { cur().modo = v.id; state.activePreset[state.tech] = null; save(); buildSliders(); buildPresets(); });
       vrow.appendChild(c);
     }
     box.appendChild(vrow);
@@ -323,7 +317,7 @@
     onTap(row, () => {
       cur()[tg.key] = !cur()[tg.key];
       state.activePreset[state.tech] = null;
-      sync(); refreshSliderStates(); buildPresets(); save(); schedulePreview(30);
+      sync(); refreshSliderStates(); buildPresets(); save();
     });
     sync();
     return row;
@@ -357,9 +351,8 @@
         cur()[key] = v;
         if (state.activePreset[state.tech]) { state.activePreset[state.tech] = null; buildPresets(); }
         renderSlider(s);
-        schedulePreview(commit ? 40 : 260);
         save();
-      } else if (commit) schedulePreview(40);
+      }
     };
     s.set = set; s.valueAt = valueAt;
     const down = (e) => {
@@ -453,173 +446,17 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* vista previa                                                        */
+  /* objetivo en Photoshop (documento y capa activos)                    */
   /* ------------------------------------------------------------------ */
-  let target = null;          // descripción del objetivo en Photoshop
-  let src = null;             // píxeles reducidos para la vista previa
-  let pvToken = 0, pvTimer = null;
-  let pvAfterURL = null, pvBeforeURL = null, pvMode = "after";
+  let target = null;
   let busy = false;
 
-  function setPvStatus(t) { $("pvStatus").textContent = t; }
-  function setPvProgress(f) { $("pvProgress").style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + "%"; }
-
-  function showEmpty(text) {
-    $("pvEmpty").classList.remove("hidden");
-    $("pvEmptyText").textContent = text;
-    $("pvImg").classList.add("hidden");
-  }
-  function showImage(url) {
-    if (!url) return;
-    $("pvEmpty").classList.add("hidden");
-    const img = $("pvImg");
-    img.classList.remove("hidden");
-    if (img.getAttribute("src") !== url) img.src = url;
-    layoutPreview();
-  }
-  function showCurrent() {
-    if (pvMode === "before" && pvBeforeURL) showImage(pvBeforeURL);
-    else if (pvAfterURL) showImage(pvAfterURL);
-    else if (pvBeforeURL) showImage(pvBeforeURL);
-  }
-
-  async function loadSource() {
+  function loadSource() {
     const t = PS.describeTarget();
     target = t.error ? null : t;
     $("srcLabel").textContent = t.error ? (t.doc ? (t.doc.title || "Documento") : "Sin documento abierto") : (t.docName + " · " + t.label);
     refreshQualityHint();
-    if (t.error) {
-      src = null; pvAfterURL = null; pvBeforeURL = null;
-      showEmpty(t.error);
-      setPvStatus("Vista previa");
-      return false;
-    }
-    try {
-      const s = await PS.readSource(t, previewLong);
-      s.key = t.docId + ":" + t.layerId + ":" + t.bounds.left + ":" + t.bounds.top + ":" + t.bounds.width + "x" + t.bounds.height;
-      src = s;
-      // imagen "antes": RGB sobre blanco
-      const n = s.width * s.height, c = s.components;
-      const rgb = new Uint8Array(n * 3);
-      for (let i = 0; i < n; i++) {
-        const a = c === 4 ? s.data[i * 4 + 3] / 255 : 1;
-        rgb[i * 3] = s.data[i * c] * a + 255 * (1 - a);
-        rgb[i * 3 + 1] = s.data[i * c + 1] * a + 255 * (1 - a);
-        rgb[i * 3 + 2] = s.data[i * c + 2] * a + 255 * (1 - a);
-      }
-      pvBeforeURL = await PS.encodePreview(rgb, s.width, s.height);
-      if (!pvAfterURL) showCurrent();
-      return true;
-    } catch (e) {
-      src = null;
-      showEmpty("No se pudo leer la imagen: " + (e && e.message ? e.message : e));
-      return false;
-    }
-  }
-
-  function schedulePreview(delay) {
-    pvToken++; // cancela la vista previa en curso
-    clearTimeout(pvTimer);
-    if (busy) return;
-    pvTimer = setTimeout(runPreview, delay === undefined ? 200 : delay);
-  }
-
-  async function runPreview() {
-    if (busy) return;
-    const my = ++pvToken;
-    if (!src) {
-      const ok = await loadSource();
-      if (!ok || my !== pvToken) return;
-    }
-    if (state.previewCollapsed) { setPvStatus("Vista previa oculta"); return; }
-    const t0 = Date.now();
-    setPvStatus("Pintando vista previa…");
-    try {
-      let selection = null;
-      if (state.selMode !== "ignorar" && target) {
-        const mask = await PS.readSelection(target, src.width, src.height).catch(() => null);
-        if (mask) selection = { mask, mode: state.selMode };
-      }
-      if (my !== pvToken) return;
-      const tex = await texturesFor(state.tech);
-      if (my !== pvToken) return;
-      const res = await Engine.render(
-        { width: src.width, height: src.height, data: src.data, components: src.components },
-        { technique: state.tech, params: cur(), seed: state.seed, selection, paper: state.paper, assets: tex.assets, support: tex.support },
-        { onProgress: (f) => { if (my === pvToken) setPvProgress(f); }, shouldCancel: () => my !== pvToken, sliceMs: 24 }
-      );
-      if (my !== pvToken) return;
-      const flat = Engine.flatten(res.paint, res.paper, res.width, res.height);
-      const url = await PS.encodePreview(flat, res.width, res.height);
-      if (my !== pvToken) return;
-      pvAfterURL = url;
-      if (pvMode === "after") showImage(url);
-      setPvProgress(0);
-      setPvStatus(techDef().name + " · vista previa en " + ((Date.now() - t0) / 1000).toFixed(1).replace(".", ",") + " s");
-    } catch (e) {
-      if (e && e.cancelled) return;
-      setPvProgress(0);
-      setPvStatus("Error en la vista previa");
-      setStatus(String(e && e.message ? e.message : e), "error");
-    }
-  }
-
-  /** Ajusta el marco y la imagen al espacio disponible. */
-  function layoutPreview() {
-    const frame = $("pvFrame");
-    const img = $("pvImg");
-    const W = document.body.clientWidth || window.innerWidth || 300;
-    const H = document.body.clientHeight || window.innerHeight || 600;
-    const wide = W >= 620;
-    const aspect = src ? src.width / src.height : 1.5;
-    if (!wide) {
-      const fw = Math.max(80, frame.clientWidth || (W - 24));
-      let h = Math.round(fw / aspect);
-      const maxH = Math.max(110, Math.round(H * 0.36));
-      h = Math.max(90, Math.min(h, maxH));
-      frame.style.height = h + "px";
-    } else {
-      frame.style.height = "";
-    }
-    const fw = Math.max(10, (frame.clientWidth || 300) - 2);
-    const fh = Math.max(10, (frame.clientHeight || 180) - 2);
-    let w = fw, h = Math.round(fw / aspect);
-    if (h > fh) { h = fh; w = Math.round(fh * aspect); }
-    img.style.width = w + "px";
-    img.style.height = h + "px";
-    // resolución de la vista previa según el marco (en pasos de 80 px)
-    const want = Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, Math.ceil(Math.max(fw, fh) / 80) * 80));
-    if (Math.abs(want - previewLong) >= 80) {
-      previewLong = want;
-      if (src) { src = null; schedulePreview(250); }
-    }
-  }
-
-  let lastW = 0, lastH = 0;
-  function watchSize() {
-    const check = () => {
-      const w = document.body.clientWidth, h = document.body.clientHeight;
-      if (w !== lastW || h !== lastH) { lastW = w; lastH = h; layoutPreview(); }
-    };
-    try { window.addEventListener("resize", check); } catch (e) { /* nada */ }
-    if (typeof ResizeObserver !== "undefined") {
-      try { new ResizeObserver(check).observe(document.body); } catch (e) { /* nada */ }
-    }
-    setInterval(check, 400); // respaldo: algunos hosts no emiten "resize"
-    check();
-  }
-
-  function togglePreview() {
-    state.previewCollapsed = !state.previewCollapsed;
-    applyPreviewCollapsed();
-    save();
-    if (!state.previewCollapsed) schedulePreview(20);
-  }
-  function applyPreviewCollapsed() {
-    const p = $("preview");
-    if (state.previewCollapsed) p.classList.add("collapsed"); else p.classList.remove("collapsed");
-    $("pvToggleIcon").src = state.previewCollapsed ? "icons/chevron-down.svg" : "icons/chevron-up.svg";
-    setTimeout(layoutPreview, 0);
+    return !t.error;
   }
 
   /* ------------------------------------------------------------------ */
@@ -671,9 +508,8 @@
   async function generate() {
     if (busy) { cancelFlag = true; setStatus("Cancelando…"); return; }
     const t = PS.describeTarget();
-    if (t.error) { setStatus(t.error, "error"); showEmpty(t.error); return; }
+    if (t.error) { setStatus(t.error, "error"); return; }
     target = t;
-    pvToken++; clearTimeout(pvTimer);
     cancelFlag = false;
     const def = techDef();
     const params = Object.assign({}, cur());
@@ -709,9 +545,11 @@
           if (mask) selection = { mask, mode: state.selMode };
         }
         const tex = await texturesFor(def.id);
+        // colores frontal y de fondo de Photoshop (tintas de la xilografía)
+        const colors = PS.getColors ? PS.getColors() : null;
         const res = await Engine.render(
           { width: s.width, height: s.height, data: s.data, components: s.components },
-          { technique: def.id, params, seed, selection, paper: state.paper, assets: tex.assets, support: tex.support },
+          { technique: def.id, params, seed, selection, paper: state.paper, assets: tex.assets, support: tex.support, colors },
           { onProgress: (f, label) => report(0.04 + f * 0.86, label), shouldCancel: cancelled, sliceMs: 60 }
         );
         if (cancelled()) throw new Engine.CancelError();
@@ -743,8 +581,7 @@
       }
     } finally {
       setBusy(false);
-      src = null; // la capa activa puede haber cambiado
-      setTimeout(() => schedulePreview(50), 300);
+      setTimeout(loadSource, 300); // la capa activa puede haber cambiado
     }
   }
 
@@ -767,34 +604,22 @@
   function wire() {
     for (const id of TABS) onTap($("tab-" + id), () => showTab(id));
     onTap($("btnGenerate"), generate);
-    onTap($("btnRefresh"), async () => { src = null; pvAfterURL = null; await loadSource(); schedulePreview(10); });
-    onTap($("pvToggle"), togglePreview);
-    onTap($("pvAfter"), () => { pvMode = "after"; setOn($("pvAfter"), true); setOn($("pvBefore"), false); showCurrent(); });
-    onTap($("pvBefore"), () => { pvMode = "before"; setOn($("pvAfter"), false); setOn($("pvBefore"), true); showCurrent(); });
+    onTap($("btnRefresh"), () => { loadSource(); setStatus("Imagen actualizada", "ok"); });
     onTap($("btnSavePreset"), savePreset);
     $("presetName").addEventListener("keydown", (e) => { if (e.key === "Enter") savePreset(); });
     onTap($("btnReset"), resetAll);
     for (const q of Object.keys(QUALITY)) onTap($("q-" + q), () => { state.quality = q; refreshOutput(); save(); });
-    for (const m of Object.keys(SELECTION_HINT)) onTap($("sel-" + m), () => { state.selMode = m; refreshOutput(); save(); schedulePreview(30); });
-    onTap($("optPaper"), () => { state.paper = !state.paper; refreshOutput(); save(); schedulePreview(30); });
+    for (const m of Object.keys(SELECTION_HINT)) onTap($("sel-" + m), () => { state.selMode = m; refreshOutput(); save(); });
+    onTap($("optPaper"), () => { state.paper = !state.paper; refreshOutput(); save(); });
     onTap($("optHide"), () => { state.hideOriginal = !state.hideOriginal; refreshOutput(); save(); });
-    onTap($("btnSeed"), () => { state.seed = 1 + Math.floor(Math.random() * 9999); refreshOutput(); save(); schedulePreview(20); });
+    onTap($("btnSeed"), () => { state.seed = 1 + Math.floor(Math.random() * 9999); refreshOutput(); save(); });
     onTap($("btnExport"), exportPNG);
 
-    let docTimer = null, lastKey = "";
+    let docTimer = null;
     PS.onDocumentChange(() => {
       if (busy) return;
       clearTimeout(docTimer);
-      docTimer = setTimeout(async () => {
-        if (busy) return;
-        const t = PS.describeTarget();
-        const key = t.error ? "err:" + t.error : t.docId + ":" + t.layerId + ":" + t.bounds.left + ":" + t.bounds.top + ":" + t.bounds.width + "x" + t.bounds.height;
-        if (key !== lastKey) pvAfterURL = null; // otra imagen: no mostrar una vista previa ajena
-        lastKey = key;
-        src = null; // el contenido puede haber cambiado: releer
-        await loadSource();
-        schedulePreview(30);
-      }, 600);
+      docTimer = setTimeout(() => { if (!busy) loadSource(); }, 400);
     });
   }
 
@@ -805,12 +630,10 @@
     buildPresets();
     buildSliders();
     refreshOutput();
-    applyPreviewCollapsed();
     showTab(state.tab);
     wire();
-    watchSize();
+    loadSource();
     setStatus("Listo");
-    schedulePreview(150);
   }
 
   init();

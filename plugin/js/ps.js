@@ -300,5 +300,17 @@
     try { core.showAlert(msg); } catch (e) { /* nada */ }
   }
 
-  root.TrazoPS = { describeTarget, readSource, readSelection, encodePreview, applyResult, modal, exportLayerPNG, onDocumentChange, alert, findDoc };
+  /** Colores frontal y de fondo de Photoshop (0..1), o null si no se pueden leer. */
+  function getColors() {
+    const read = (c) => {
+      try {
+        if (!c) return null;
+        const rgb = c.rgb;
+        return { r: rgb.red / 255, g: rgb.green / 255, b: rgb.blue / 255 };
+      } catch (e) { return null; }
+    };
+    try { return { fg: read(app.foregroundColor), bg: read(app.backgroundColor) }; } catch (e) { return null; }
+  }
+
+  root.TrazoPS = { getColors, describeTarget, readSource, readSelection, encodePreview, applyResult, modal, exportLayerPNG, onDocumentChange, alert, findDoc };
 })(typeof window !== "undefined" ? window : globalThis);

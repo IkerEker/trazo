@@ -39,7 +39,7 @@ de las variantes, hay dos controles que se mantienen al cambiar de variante:
 Cómo se analizó cada técnica antes de programarla: [`REFERENCIAS/ESTUDIO_TECNICAS.md`](REFERENCIAS/ESTUDIO_TECNICAS.md).
 
 - Sin dependencias externas. Las texturas de cada técnica se cargan solo al usarla.
-- Vista previa en vivo que se cancela sola al mover un control.
+- Sin vista previa en el panel: la pintura se hace solo al pulsar GENERAR (es un proceso pesado).
 - Interfaz en negro, blanco y verde que se adapta a cualquier tamaño de panel o grupo de pestañas.
 
 ---
@@ -127,15 +127,15 @@ Medidos en un procesador de servidor de 4 núcleos con el mismo motor JavaScript
 
 | Técnica | 5 MP (3000×1688) |
 |---|---|
-| Óleo | 9,0 s |
-| Lápiz | 4,3 s |
+| Óleo | 11,8 s |
+| Lápiz | 3,3 s |
 | Gouache | 9,5 s (Diluido 13,3 s) |
 | Acuarela | 7,8 s (Con dibujo 8,8 s) |
 | Ceras | 11,6 s |
 | Mixta L+G | 10,5 s |
 | Xilografía | 3,3 s |
 
-La vista previa del panel tarda alrededor de 1 s. A 6 MP el motor usa unos 300–450 MB de
+No hay vista previa: el panel solo pinta al pulsar GENERAR. A 6 MP el motor usa unos 300–450 MB de
 memoria; en calidad Máxima (16 MP) puede pasar de 1 GB. Durante GENERAR, Photoshop muestra su barra
 de progreso y se puede cancelar desde ahí o desde el propio botón.
 
@@ -189,6 +189,10 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      baja, aspecto de foto de museo sin destellos); la pasta proyecta **sombras cortas**; entre
      pinceladas asoma la **imprimatura** cálida; y un **último pase de pinceladas anchas** fuera del
      foco, como hacían Sargent o Sorolla.
+   - **Cerdas a escala real** (óleo): cada pincelada lleva surcos finos de cerdas (~0,7 mm en el
+     tamaño supuesto del cuadro) que derivan un poco a lo largo del trazo, con mechones más o menos
+     cargados; tiñen ligeramente el tono, dejan surcos en el relieve (los revela la Luz), deshilachan
+     el filo y abren en vetas el final seco.
    - **Gouache sin volumen**: solo sus propios trazos (`TEXTURES/TRAZOS/GUACHE` y las pinceladas grises
      sueltas → `pin_guache.bin`), planos y mates, con la variación de tono interna de cada trazo
      real y sin relieve ni brillo. Seca con los valores comprimidos y los tintes claros algo
@@ -206,19 +210,19 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
      y el pastel graso son cubrientes, con arrastre de color. Todas usan los trazos reales de
      `TEXTURES/TRAZOS/CERAS` (Manley también los de cera escolar) con su variación de tono interna,
      **planos**: solo ~1 % de los trazos lleva pasta, y nunca en las zonas importantes.
-4. **Lápiz** (`sketch.js`), boceto a lápiz según Lu, Xu y Jia (NPAR 2012):
-   - **Líneas**: cada punto de borde de la foto (simplificada sin perder los bordes) se dibuja como
-     un segmento a lo largo del borde. Al acumularse salen líneas de dibujante, más oscuras donde el
-     borde es más fuerte, que se pasan un poco en las puntas y se cruzan en las esquinas.
-   - **Tono**: el histograma de la foto se ajusta al de un dibujo a lápiz real (mucho papel blanco,
-     medios tonos amplios y pocos oscuros; cada variante con su reparto).
-   - **Rayado**: el tono se dibuja con una textura de rayado hecha con trazos reales de grafito
-     (`pin_lapiz`; el carboncillo con barras de carbón y difuminado). Las zonas oscuras son la misma
-     textura con más pasadas (T = H^β) y en las sombras se cruza un segundo rayado. Con curvatura,
-     cada plano con dirección clara se raya en su dirección.
-   - **Papel**: el grafito se queda en los picos del grano; nunca llega al negro y brilla donde está
-     muy cargado. El carboncillo da un negro mate. La mixta lápiz + gouache y la acuarela con dibujo
-     usan este mismo lápiz.
+4. **Lápiz** (`lapiz.js`), a la manera del efecto «Lápiz» de Word / Office:
+   - **Tono fiel**: el tono es el de la foto (los oscuros son oscuros, las luces son papel), con el
+     contraste local algo realzado para que los bordes queden nítidos **sin contornos negros**.
+   - **Garabato de grafito**: encima, miles de trazos finos de lápiz reales (`pin_lapiz`) en muchas
+     direcciones (unos siguen la forma de la foto y otros van sueltos), de largos, anchos, presiones
+     y curvas distintos. Hacen vibrar el tono: se ven mucho en los medios tonos, apenas en las luces,
+     y en las sombras dejan huecos más claros.
+   - **Papel**: el grafito se queda en los picos del grano, nunca llega al negro y brilla donde está
+     muy cargado. Se evita lo que delata un filtro barato: contornos gruesos, ruido granulado,
+     blancos quemados y rayado mecánico de una sola dirección.
+   - Variantes: **Línea suelta** (tono ligero y líneas sueltas de dibujante), **Rayado** (tono
+     completo), **Carboncillo** (barras de carbón difuminadas, negro mate) y **Negros expresivos**.
+   - La mixta lápiz + gouache y la acuarela con dibujo usan las líneas de `sketch.js` (Lu et al. 2012).
 5. **Acuarela** (`watercolor2.js`): de dos a cuatro aguadas según lo oscura que sea cada
    mancha. Las primeras, húmedas, tienen bordes suaves, flecos y floraciones, y sus colores
    se funden en los bordes. Las últimas, en seco, tienen bordes nítidos. Al secar, el
@@ -242,6 +246,9 @@ de progreso y se puede cancelar desde ahí o desde el propio botón.
 7. **Xilografía**: tres zonas como en los grabados reales (luces de papel limpio, sombras de negro
    pleno con solo veta y moteado, y líneas de gubia solo en los medios tonos); el moteado de la
    tinta sigue los valles del papel; las planchas de color se desregistran enteras.
+   Con **dos tintas**, la tinta de color es el **color frontal** de Photoshop en el momento de
+   GENERAR; con **tres tintas**, el frontal y el de fondo (si el de fondo es blanco o negro, la
+   segunda tinta sale de la imagen). Las zonas claras van a la tinta clara y las oscuras a la otra.
 
 ---
 
@@ -254,7 +261,7 @@ plugin/              ← el plugin UXP (esto es lo que se instala)
   css/styles.css
   js/engine.js       ← motor empaquetado (generado, no editar)
   js/ps.js           ← puente con Photoshop: píxeles, capas, historial, exportar
-  js/ui.js           ← interfaz: pestañas, sliders, presets, vista previa
+  js/ui.js           ← interfaz: pestañas, sliders, presets y GENERAR
   icons/
   textures/          ← trazos reales por técnica (*.bin) y soportes (soporte-*.bin), generados
 engine/              ← código fuente del motor (módulos)
@@ -268,7 +275,8 @@ engine/              ← código fuente del motor (módulos)
   xilografia.js      ← cortes de gubia, estampación y planchas de color
   mixta.js           ← mixta lápiz + gouache
   kit.js             ← texturas repetibles, manchas, paleta, composición y grano del papel
-  sketch.js          ← Lápiz (líneas + tono + rayado real, Lu et al. 2012)
+  lapiz.js           ← Lápiz (tono fiel + garabato de grafito real, como el efecto de Word)
+  sketch.js          ← líneas de lápiz para la mixta y la acuarela con dibujo (Lu et al. 2012)
   watercolor.js      ← Acuarela
   paper.js           ← papel y lienzo
   library.js         ← carga de trazos y soportes reales, mapeo sobre recorridos, mipmaps
