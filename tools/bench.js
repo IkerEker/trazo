@@ -6,7 +6,7 @@
 //   node tools/bench.js                 mide las 29 variantes y escribe tools/bench_out/bench_<fecha>.json
 //   node tools/bench.js --check         además compara con tools/ref/ (md5 de los .bin y huellas de los renders)
 //   node tools/bench.js --ref           guarda las huellas actuales como referencia en tools/ref/
-//   opciones: --solo oleo,lapiz   --tam 1000 (lado largo)   --rep 1   --sin-procedural
+//   opciones: --solo oleo,lapiz   --tam 1000 (lado largo)   --rep 2 (1.ª en frío; las demás reutilizan el análisis)   --sin-procedural
 //
 // Fases medidas por variante: cargar texturas (leer + parsear, como el panel: una vez por técnica),
 // cada fase del motor (las etiquetas de progreso), aplanar. El intercambio de píxeles con Photoshop
@@ -87,7 +87,7 @@ const ms = (t) => Math.round(Number(process.hrtime.bigint() - t) / 1e5) / 10;
 async function main() {
   const L = +opt("--tam", 1000);
   const W = L, H = Math.round(L * 0.75);
-  const reps = +opt("--rep", 1);
+  const reps = +opt("--rep", 2);
   const solo = opt("--solo", null);
   const techs = T.TECHNIQUES.map((t) => t.id).filter((id) => !solo || solo.split(",").includes(id));
   const img = escena(W, H);
@@ -117,7 +117,8 @@ async function main() {
       for (const nm of Engine.ASSETS_FOR[tech] || []) { const x = load(nm); tcarga += x.t; if (x.tex) assets[nm] = x.tex; }
       const s = load("soporte-" + Engine.SUPPORT_FOR[tech]); tcarga += s.t;
       const params = Object.assign({}, def.defaults, v.values, { modo: v.id });
-      let best = null, huella = null;
+      let best = null, huella = null, frio = null;
+      if (Engine.clearMemo) Engine.clearMemo(); // la 1.ª pasada siempre en frío (sin análisis guardado)
       for (let k = 0; k < reps; k++) {
         const fases = {}; let last = null, lt = process.hrtime.bigint();
         const t0 = process.hrtime.bigint();
@@ -132,12 +133,13 @@ async function main() {
         const h = sha(res.paint, res.paper);
         if (huella && h !== huella) throw new Error(`${tech}/${v.id}: dos pasadas dan distinto (no determinista)`);
         huella = h;
+        if (k === 0) { frio = { motor_ms: tm, fases, aplanar_ms: tflat }; continue; }
         if (!best || tm < best.motor_ms) best = { motor_ms: tm, fases, aplanar_ms: tflat };
       }
       const mem = process.memoryUsage();
-      const row = { tecnica: tech, variante: v.id, carga_texturas_ms: tcarga, ...best, huella, heap_mb: Math.round(mem.heapUsed / 2 ** 20), rss_mb: Math.round(mem.rss / 2 ** 20) };
+      const row = { tecnica: tech, variante: v.id, carga_texturas_ms: tcarga, ...frio, repetir_ms: best ? best.motor_ms : null, repetir_fases: best ? best.fases : null, huella, heap_mb: Math.round(mem.heapUsed / 2 ** 20), rss_mb: Math.round(mem.rss / 2 ** 20) };
       r.variantes.push(row);
-      console.log(`${(tech + "/" + v.id).padEnd(24)} ${String(best.motor_ms).padStart(8)} ms  texturas ${String(tcarga).padStart(6)} ms  ${huella}`);
+      console.log(`${(tech + "/" + v.id).padEnd(24)} ${String(frio.motor_ms).padStart(8)} ms${best ? "  repetir " + String(best.motor_ms).padStart(8) + " ms" : ""}  texturas ${String(tcarga).padStart(6)} ms  ${huella}`);
     }
     if (!a.includes("--sin-procedural")) {
       // sin material: el camino de reserva también tiene que seguir igual
@@ -147,8 +149,9 @@ async function main() {
     }
   }
   r.total_motor_ms = Math.round(r.variantes.reduce((s, x) => s + x.motor_ms, 0));
+  if (reps > 1) r.total_repetir_ms = Math.round(r.variantes.reduce((s, x) => s + x.repetir_ms, 0));
   r.rss_pico_mb = Math.round(process.resourceUsage().maxRSS / 1024);
-  console.log(`total motor ${r.total_motor_ms} ms · pico RAM ${r.rss_pico_mb} MB`);
+  console.log(`total motor ${r.total_motor_ms} ms${r.total_repetir_ms ? " · al repetir " + r.total_repetir_ms + " ms" : ""} · pico RAM ${r.rss_pico_mb} MB`);
 
   fs.mkdirSync(OUT, { recursive: true });
   const outf = path.join(OUT, `bench_${r.fecha.replace(/[:.]/g, "-")}.json`);
