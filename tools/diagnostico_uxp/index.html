@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{font:12px sans-serif;color:var(--uxp-host-text-color);background:var(--uxp-host-background-color);padding:10px}
+button{margin:4px 0} textarea{width:100%;height:340px;font:11px monospace}
+</style></head><body>
+<p>Abre un documento RGB (cualquiera, mejor de unos 4000 px) y pulsa el botón. Comprueba qué deja usar Photoshop
+(WebGL, Workers, WebAssembly…) y cuánto tarda el intercambio de píxeles. No cambia el documento: crea una capa temporal y la borra.</p>
+<button id="go">Comprobar</button>
+<textarea id="out" readonly></textarea>
+<p id="st"></p>
+<script src="main.js"></script>
+</body></html>

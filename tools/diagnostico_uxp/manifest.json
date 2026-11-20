@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 5,
+  "id": "com.trazo.diagnostico",
+  "name": "Trazo Diagnostico",
+  "version": "1.0.0",
+  "main": "index.html",
+  "host": { "app": "PS", "minVersion": "24.5.0", "data": { "apiVersion": 2, "loadEvent": "use" } },
+  "entrypoints": [
+    { "type": "panel", "id": "diag", "label": { "default": "Trazo · Diagnóstico" },
+      "minimumSize": { "width": 260, "height": 300 }, "preferredFloatingSize": { "width": 420, "height": 560 },
+      "icons": [ { "width": 23, "height": 23, "path": "icons/panel-dark.png", "scale": [1, 2], "theme": ["darkest", "dark", "medium"] },
+                 { "width": 23, "height": 23, "path": "icons/panel-light.png", "scale": [1, 2], "theme": ["lightest", "light"] } ] }
+  ],
+  "icons": [ { "width": 23, "height": 23, "path": "icons/panel-dark.png", "scale": [1, 2], "theme": ["dark", "darkest"], "species": ["generic"] },
+             { "width": 23, "height": 23, "path": "icons/panel-light.png", "scale": [1, 2], "theme": ["lightest", "light"], "species": ["generic"] } ],
+  "requiredPermissions": { "localFileSystem": "request" }
+}

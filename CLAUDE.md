@@ -19,7 +19,11 @@ Plugin UXP de Photoshop (pintura tradicional). Motor en `engine/` (se empaqueta 
 - Fuentes: `tools/fuentes_ids.json` (nombre de siempre → `or:<md5>`) + `tools/biblioteca.py` (resuelve id → archivo con
   `$TEXTURAS_ROOT/TEXTURAS/indice/indice.json` y comprueba el md5). Construir:
   `TEXTURAS_ROOT=<Biblioteca> python3 tools/build_assets.py && TEXTURAS_ROOT=<Biblioteca> python3 tools/extract_papers.py`.
-- Prueba exacta: `python3 tools/prueba_exacta.py` (md5 de los 20 `.bin` contra `tools/ref/textures.md5` y renders de
-  `tools/run.js` contra `tools/ref/renders.md5`). Tiene que decir «IDÉNTICO».
-- Banco de velocidad: `node tools/bench.js` (o `tools\bench.bat` en Windows) → `tools/bench_out/bench_<fecha>.json`.
+- Prueba exacta: `node tools/bench.js --check` (md5 de los 21 `.bin` contra `tools/ref/textures.md5.json` y huellas de
+  las 29 variantes + 7 procedurales, semilla 7, escena sintética 1000×750, contra `tools/ref/renders_1000.json`).
+  Tiene que decir «IDÉNTICO». Antes de reconstruir texturas: guardar md5 y comparar después.
+- Banco de velocidad: el mismo `node tools/bench.js` (o `tools\bench.bat` en Windows) → `tools/bench_out/bench_<fecha>.json`
+  (tiempo por variante y por fase del motor). Dentro de Photoshop, el panel guarda los tiempos por fase (leer, texturas,
+  motor, escalar, crear capas) en `tiempos.json` de su carpeta de datos. Qué permite el anfitrión (WebGL, Workers,
+  WebAssembly) y cuánto tarda getPixels/putPixels: plugin `tools/diagnostico_uxp` (`dist/TrazoDiagnostico-1.0.0.ccx`).
 - Trabajar en una rama; no fusionar en `main` sin el OK de Iker.
