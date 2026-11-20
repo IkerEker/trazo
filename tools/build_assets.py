@@ -55,16 +55,10 @@ FAMILIES = {
     "lapiz": [(1, g(os.path.join(TR, "LAPIZ", "*"), os.path.join(TR, "Gemini_Generated_Image_uy13*"), os.path.join(TR, "Gemini_Generated_Image_2tepo*"),
                     os.path.join(TR, "Hoja de garabatos de grafito*"), os.path.join(TR, "Garabatos abstractos de grafito*"),
                     os.path.join(TR, "Doodles de grafito*")))],
-    "cera": [(2, g(os.path.join(TR, "Cinco trazos azules sobre*"), os.path.join(TR, "Cinco trazos rojos*"), os.path.join(TR, "Cuatro trazos rojos texturizados*"),
-                   os.path.join(TR, "Tres trazos azules texturizados*"), os.path.join(TR, "Gemini_Generated_Image_4k0x*"),
-                   os.path.join(TR, "Garabato de carb*"), os.path.join(TR, "Trazo serpenteante*"))),
-             (1, g(os.path.join(TR, "CERAS", "*")))],
     # ceras de colores: óleo en barra / pastel graso, cera escolar y pastel seco
     "barra": [(2, g(os.path.join(TR, "CERAS", "*")))],
     "manley": [(2, g(os.path.join(TR, "Cinco trazos rojos*"), os.path.join(TR, "Cuatro trazos rojos texturizados*"),
                      os.path.join(TR, "Cinco trazos azules sobre*"), os.path.join(TR, "Tres trazos azules texturizados*")))],
-    "pastel": [(2, g(os.path.join(TR, "Gemini_Generated_Image_4k0x*"), os.path.join(TR, "Garabato de carb*"),
-                     ))],
     # gouache plano (sin volumen): la carpeta GUACHE y las pinceladas grises sueltas
     "guache": [(2, g(os.path.join(TR, "GUACHE", "*"),
                      *[os.path.join(TR, f"Gemini_Generated_Image_{k}.jpg") for k in
@@ -348,12 +342,10 @@ def build_tiles():
 
 
 # ------------------------------------------------------------------ texturas 9:16 (no repetibles)
+# (20-11-2026) fuera: cera, pastel (familias) y goteos, grafito, carbón (overlays): el motor no los usaba
 OVERLAYS = {
     "impresion": ["1f8a", "flvu", "gjqu", "v3eb"],
     "madera": ["2a6p", "2uid", "xydf"],
-    "goteos": ["2nzv", "bmol", "v9cx"],
-    "grafito": ["614e", "h24g", "o4l9"],
-    "carbon": ["e6zo", "uwxt"],
 }
 
 

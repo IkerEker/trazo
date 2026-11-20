@@ -1,4 +1,4 @@
-/*! Trazo 1.13.1 · motor de pintura (generado por tools/bundle.js, no editar) */
+/*! Trazo 1.13.2 · motor de pintura (generado por tools/bundle.js, no editar) */
 (function (root) {
 "use strict";
 const __defs = {}, __cache = {};
@@ -730,9 +730,9 @@ const SUPPORT_FOR = {
 const ASSETS_FOR = {
   oleo: ["pin_oleo", "pin_gouache", "manchas", "tiles_pintura"],
   gouache: ["pin_guache", "manchas", "tiles_pintura", "pin_acuarela", "tiles_acuarela"],
-  acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz", "ov_goteos"],
-  lapiz: ["grano_grafito", "pin_lapiz", "pin_cera", "ov_carbon"],
-  ceras: ["pin_barra", "pin_manley", "pin_pastel"],
+  acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz"],
+  lapiz: ["grano_grafito", "pin_lapiz"],
+  ceras: ["pin_barra", "pin_manley"],
   mixtalg: ["pin_lapiz", "pin_guache", "manchas"],
   xilografia: ["ov_madera", "ov_impresion"],
 };
