@@ -174,8 +174,7 @@ def main():
     # ---------------------------------------------------------------- 7. repetidos en cada rama
     by = {x["md5"]: x["id"] for x in json.load(open(os.path.join(B, "TEXTURAS", "indice", "indice.json"), encoding="utf-8"))["assets"] if x.get("md5")}
     rep_lines, total_rep, total_mb, nuevos = [], 0, 0.0, []
-    for ref_ in sorted(r for r in loc if r.startswith("refs/heads/")):
-        br = ref_[len("refs/heads/"):]
+    for br in sorted(git("branch", "--format=%(refname:short)").split()):
         n = mb = 0
         for l in git("ls-tree", "-r", "-l", br).splitlines():
             meta, path = l.split("\t", 1)
