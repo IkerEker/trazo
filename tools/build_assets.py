@@ -1,5 +1,6 @@
 """
-Trazo · construye todas las bibliotecas de material real a partir de TEXTURES/.
+Trazo · construye todas las bibliotecas de material real a partir de la biblioteca común
+(TEXTURAS_ROOT, leída por id con tools/biblioteca.py; las rutas TEXTURES/… son solo nombres).
 
   pin_<familia>.bin   pinceladas enderezadas (óleo, gouache, lápiz, cera, barra, manley, pastel, acuarela)
   manchas.bin         manchas con forma (sellos) con densidad y relieve
@@ -17,6 +18,7 @@ from scipy import ndimage as ndi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import extract_strokes as ES
+import biblioteca as B
 
 Image.MAX_IMAGE_PIXELS = None
 ROOT = ES.ROOT
@@ -37,7 +39,7 @@ T916 = os.path.join(T, "TEXTURAS EN 9-16 NO TILEABLES")
 def g(*pats):
     out = []
     for p in pats:
-        out += sorted(f for f in glob.glob(p) if os.path.isfile(f) and not f.endswith(".md"))
+        out += [f for f in B.glob(p) if not f.endswith(".md")]
     return out
 
 
@@ -77,11 +79,11 @@ OPAQUE = {"guache", "oleo", "gouache", "cera", "barra", "manley", "pastel"}
 
 
 def md5(f):
-    return hashlib.md5(open(f, "rb").read()).hexdigest()
+    return hashlib.md5(open(B.real(f), "rb").read()).hexdigest()
 
 
 def load_rgb(path, maxside=None):
-    im = Image.open(path).convert("RGB")
+    im = Image.open(B.real(path)).convert("RGB")
     if maxside and max(im.size) > maxside:
         im.thumbnail((maxside, maxside), Image.LANCZOS)
     return np.asarray(im).astype(np.float32) / 255.0
@@ -302,7 +304,7 @@ def tile_stats(L):
 
 
 def tile_planes(path, N, color):
-    im = Image.open(path).convert("RGB")
+    im = Image.open(B.real(path)).convert("RGB")
     im = im.resize((N, N), Image.BOX)  # factor entero: sigue siendo repetible
     a = np.asarray(im).astype(np.float32) / 255
     L = 0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]
@@ -363,7 +365,7 @@ def build_overlays():
             m = [f for f in files if key in os.path.basename(f) and "(1)" not in f]
             if not m:
                 continue
-            im = Image.open(m[0]).convert("L")
+            im = Image.open(B.real(m[0])).convert("L")
             w, h = im.size
             f2 = 288 / min(w, h)
             im = im.resize((int(w * f2), int(h * f2)), Image.LANCZOS)
@@ -407,7 +409,7 @@ def build_grano():
     files = g(os.path.join(TR, "LAPIZ", "*"))
     items = []
     for f in files:
-        L = np.asarray(Image.open(f).convert("L")).astype(np.float32) / 255
+        L = np.asarray(Image.open(B.real(f)).convert("L")).astype(np.float32) / 255
         bg = ES.fit_background(L)
         D = np.clip(1 - L / np.maximum(bg, 0.05), 0, 1)
         h, w = D.shape
@@ -460,6 +462,7 @@ def build_grano():
 
 
 if __name__ == "__main__":
+    B.aviso()
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
     if only in (None, "pin"): build_pinceladas()
     if only in (None, "manchas"): build_manchas()

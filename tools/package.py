@@ -49,7 +49,22 @@ def check_manifest():
         errs.append("falta el archivo main")
     if errs:
         sys.exit("manifest.json no válido:\n  " + "\n  ".join(errs))
+    check_textures()
     return m
+
+
+def check_textures():
+    """El .ccx tiene que llevar dentro todas las texturas que pide el motor (ASSETS_FOR y SUPPORT_FOR)."""
+    import re
+    src = open(os.path.join(ROOT, "engine", "index.js"), encoding="utf-8").read()
+    names = set()
+    for block in ("SUPPORT_FOR", "ASSETS_FOR"):
+        body = re.search(block + r" = \{(.*?)\};", src, re.S).group(1)
+        for s in re.findall(r'"([a-z_]+)"', body):
+            names.add("soporte-" + s if block == "SUPPORT_FOR" else s)
+    falta = sorted(n for n in names if not os.path.isfile(os.path.join(PLUGIN, "textures", n + ".bin")))
+    if falta:
+        sys.exit("faltan texturas en plugin/textures:\n  " + "\n  ".join(n + ".bin" for n in falta))
 
 
 def main():

@@ -20,6 +20,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
+import biblioteca as B
 import extract_strokes as ES
 
 N = 512
@@ -110,8 +111,8 @@ def main():
         blocks = []
         seen = set()
         for folder in folders:
-            for f in sorted(glob.glob(os.path.join(ES.SRC, folder, "*.jp*g"))):
-                hsh = hashlib.md5(open(f, "rb").read()).hexdigest()
+            for f in B.glob(os.path.join(ES.SRC, folder, "*.jp*g")):
+                hsh = hashlib.md5(open(B.real(f), "rb").read()).hexdigest()
                 if hsh in seen:
                     continue
                 seen.add(hsh)
@@ -142,4 +143,5 @@ def main():
 
 
 if __name__ == "__main__":
+    B.aviso()
     main()

@@ -14,6 +14,8 @@ Además guarda hojas de contacto en tools/out/ para revisar el resultado.
 uso: python3 tools/extract_strokes.py [--only OLEO] [--no-write]
 """
 import glob
+
+import biblioteca as B
 import hashlib
 import json
 import os
@@ -42,7 +44,7 @@ def smoothstep(e0, e1, x):
 
 
 def load_lum(path):
-    im = np.asarray(Image.open(path).convert("RGB")).astype(np.float32) / 255.0
+    im = np.asarray(Image.open(B.real(path)).convert("RGB")).astype(np.float32) / 255.0
     return 0.299 * im[..., 0] + 0.587 * im[..., 1] + 0.114 * im[..., 2]
 
 
@@ -315,11 +317,11 @@ def main():
     for folder, tech in FOLDERS.items():
         if only and folder != only:
             continue
-        files = sorted(glob.glob(os.path.join(SRC, folder, "*.jp*g")) + glob.glob(os.path.join(SRC, folder, "*.png")))
+        files = sorted(B.glob(os.path.join(SRC, folder, "*.jp*g")) + B.glob(os.path.join(SRC, folder, "*.png")))
         # descartar copias exactas (p. ej. «imagen (1).jpg»)
         seen, uniq = set(), []
         for f in files:
-            hsh = hashlib.md5(open(f, "rb").read()).hexdigest()
+            hsh = hashlib.md5(open(B.real(f), "rb").read()).hexdigest()
             if hsh not in seen:
                 seen.add(hsh)
                 uniq.append(f)
