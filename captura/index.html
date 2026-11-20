@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Trazo · Captura</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/extra.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="top">
+      <div class="brand">
+        <img class="brand-mark" src="icons/mark.svg" alt="">
+        <div class="brand-text">
+          <div class="brand-name">Trazo · Captura</div>
+          <div class="brand-sub" id="headSub">Guía para escanear tus trazos</div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <div class="tab on" id="tab-guia"><span class="tab-num">1</span><span>Guía</span></div>
+      <div class="tab" id="tab-lista"><span class="tab-num">2</span><span>Lista</span></div>
+      <div class="tab" id="tab-escanear"><span class="tab-num">3</span><span>Escanear</span></div>
+    </nav>
+
+    <main class="content" id="content">
+      <!-- 1 · Guía -->
+      <div class="page" id="page-guia">
+        <div id="guide"></div>
+      </div>
+
+      <!-- 2 · Lista -->
+      <div class="page hidden" id="page-lista">
+        <div class="techs" id="listTechs"></div>
+        <div class="tech-desc" id="listMaterial"></div>
+        <div class="list-progress">
+          <div class="list-progress-text" id="listCount">0 / 0</div>
+          <div class="progress grow"><div class="progress-fill" id="listBar"></div></div>
+        </div>
+        <div id="checklist"></div>
+        <div class="row-end"><div class="btn ghost" id="btnResetList">Desmarcar esta lista</div></div>
+      </div>
+
+      <!-- 3 · Escanear -->
+      <div class="page hidden" id="page-escanear">
+        <div class="section-title">1 · COMPROBAR EL ESCANEO ABIERTO</div>
+        <div class="btn ghost wide" id="btnCheck"><img src="icons/scan.svg" alt=""><span>Comprobar documento activo</span></div>
+        <div id="checkResults" class="results"></div>
+
+        <div class="section-title">2 · NOMBRE DEL ARCHIVO</div>
+        <div class="techs techs-sm" id="saveTechs"></div>
+        <div class="seg seg-block hidden" id="segSupport"></div>
+        <div class="field-row">
+          <div class="field-label">Hoja</div>
+          <div class="stepper">
+            <div class="iconbtn sm" id="sheetMinus"><img src="icons/minus.svg" alt=""></div>
+            <div class="stepper-val" id="sheetVal">H01</div>
+            <div class="iconbtn sm" id="sheetPlus"><img src="icons/plus.svg" alt=""></div>
+          </div>
+        </div>
+        <div class="field-row" id="rotRow">
+          <div class="field-label">Rotación</div>
+          <div class="seg grow" id="segRot">
+            <div class="seg-item on" id="rot-000">0°</div>
+            <div class="seg-item" id="rot-090">90°</div>
+            <div class="seg-item" id="rot-180">180°</div>
+            <div class="seg-item" id="rot-270">270°</div>
+          </div>
+        </div>
+        <div class="hint" id="rotHint"></div>
+        <div class="filename" id="fileName">OLEO_H01_R000.png</div>
+
+        <div class="section-title">3 · CARPETA</div>
+        <div class="folder-row">
+          <div class="folder-path" id="folderPath">Sin elegir: se pedirá al guardar</div>
+          <div class="btn ghost" id="btnFolder"><img src="icons/folder.svg" alt=""><span>Elegir</span></div>
+        </div>
+
+        <div class="section-title">PROGRESO EN LA CARPETA</div>
+        <div id="progressGrid" class="pgrid"></div>
+        <div class="hint">Cada punto es una rotación guardada. Los archivos que ya estén en la carpeta con el nombre correcto también cuentan.</div>
+
+        <div class="section-title">PLANTILLA</div>
+        <div class="btn ghost wide" id="btnTemplate"><img src="icons/template.svg" alt=""><span>Crear plantilla 20×20 cm con marcas</span></div>
+        <div class="hint">Documento de 20×20 cm a 600 ppp con las 4 cruces de registro y guías de margen. Imprímela al 100 % sobre tu papel o úsala para colocar las cruces.</div>
+      </div>
+    </main>
+
+    <footer class="foot">
+      <div class="foot-status">
+        <div class="status" id="status">Listo</div>
+      </div>
+      <div class="progress"><div class="progress-fill" id="progress"></div></div>
+      <div class="btn primary big" id="btnSave"><img src="icons/save-dark.svg" alt=""><span id="saveLabel">GUARDAR PNG</span></div>
+    </footer>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
