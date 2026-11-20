@@ -505,6 +505,20 @@
     return out;
   }
 
+  // Guarda los tiempos de las últimas 50 generaciones en <carpeta de datos del plugin>/tiempos.json.
+  // Solo mide: no cambia nada del resultado.
+  async function saveTimes(rec) {
+    try {
+      const fsx = require("uxp").storage.localFileSystem;
+      const dir = await fsx.getDataFolder();
+      let list = [];
+      try { const f0 = await dir.getEntry("tiempos.json"); list = JSON.parse(await f0.read()) || []; } catch (e) { /* primera vez */ }
+      list.push(rec);
+      const f = await dir.createFile("tiempos.json", { overwrite: true });
+      await f.write(JSON.stringify(list.slice(-50), null, 1));
+    } catch (e) { /* sin carpeta de datos (simulador): nada */ }
+  }
+
   async function generate() {
     if (busy) { cancelFlag = true; setStatus("Cancelando…"); return; }
     const t = PS.describeTarget();
@@ -516,6 +530,7 @@
     const seed = state.seed;
     const q = QUALITY[state.quality];
     const t0 = Date.now();
+    const tiempos = {}; // ms por fase, para medir en el PC de Iker (tiempos.json en la carpeta de datos)
     setBusy(true, "CANCELAR");
     setStatus("Preparando…");
     setProgress(0.01);
@@ -537,14 +552,19 @@
           maxLong = Math.floor(Math.max(b.width, b.height) * k);
         }
         report(0.02, "Leyendo la imagen");
+        let tf = Date.now();
+        const lap = (k) => { const n = Date.now(); tiempos[k] = (tiempos[k] || 0) + n - tf; tf = n; };
         const s = await PS.readSource(t, maxLong);
+        lap("leer_imagen");
         if (cancelled()) throw new Engine.CancelError();
         let selection = null;
         if (state.selMode !== "ignorar") {
           const mask = await PS.readSelection(t, s.width, s.height);
           if (mask) selection = { mask, mode: state.selMode };
         }
+        lap("leer_seleccion");
         const tex = await texturesFor(def.id);
+        lap("texturas");
         // colores frontal y de fondo de Photoshop (tintas de la xilografía)
         const colors = PS.getColors ? PS.getColors() : null;
         const res = await Engine.render(
@@ -552,6 +572,7 @@
           { technique: def.id, params, seed, selection, paper: state.paper, assets: tex.assets, support: tex.support, colors },
           { onProgress: (f, label) => report(0.04 + f * 0.86, label), shouldCancel: cancelled, sliceMs: 60 }
         );
+        lap("motor");
         if (cancelled()) throw new Engine.CancelError();
         let paint = res.paint, paper = res.paper, w = res.width, h = res.height;
         const fb = s.bounds;
@@ -561,17 +582,22 @@
           if (paper) paper = upscaleRGBA(paper, w, h, fb.width, fb.height);
           w = fb.width; h = fb.height;
         }
+        if (w !== res.width || h !== res.height) lap("escalar");
         report(0.95, "Creando capas");
         const applied = await PS.applyResult({
           docId: t.docId, layerId: t.layerId, bounds: fb, width: w, height: h,
           paint, paper, name: def.name, paperName: def.id === "oleo" ? "Lienzo" : "Papel",
           hideOriginal: state.hideOriginal, profile: s.profile, is16: t.is16,
         }, ctx);
+        lap("crear_capas");
+        tiempos.tamano = s.width + "x" + s.height;
         report(1, "Listo");
         return applied;
       }, "Trazo · " + def.name);
       lastResult = { docId: result.docId, paintLayerId: result.paintLayerId, tech: def.id };
       setStatus(def.name + " generado en " + ((Date.now() - t0) / 1000).toFixed(1).replace(".", ",") + " s · capa nueva creada", "ok");
+      tiempos.total = Date.now() - t0;
+      saveTimes(Object.assign({ fecha: new Date().toISOString(), tecnica: def.id, modo: params.modo, calidad: state.quality }, tiempos));
     } catch (e) {
       if ((e && e.cancelled) || cancelFlag) setStatus("Cancelado. No se ha modificado el documento.");
       else {

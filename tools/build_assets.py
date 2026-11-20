@@ -1,5 +1,6 @@
 """
-Trazo · construye todas las bibliotecas de material real a partir de TEXTURES/.
+Trazo · construye todas las bibliotecas de material real a partir de la biblioteca común
+(TEXTURAS_ROOT, leída por id con tools/biblioteca.py; las rutas TEXTURES/… son solo nombres).
 
   pin_<familia>.bin   pinceladas enderezadas (óleo, gouache, lápiz, cera, barra, manley, pastel, acuarela)
   manchas.bin         manchas con forma (sellos) con densidad y relieve
@@ -17,6 +18,7 @@ from scipy import ndimage as ndi
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import extract_strokes as ES
+import biblioteca as B
 
 Image.MAX_IMAGE_PIXELS = None
 ROOT = ES.ROOT
@@ -37,7 +39,7 @@ T916 = os.path.join(T, "TEXTURAS EN 9-16 NO TILEABLES")
 def g(*pats):
     out = []
     for p in pats:
-        out += sorted(f for f in glob.glob(p) if os.path.isfile(f) and not f.endswith(".md"))
+        out += [f for f in B.glob(p) if not f.endswith(".md")]
     return out
 
 
@@ -53,16 +55,10 @@ FAMILIES = {
     "lapiz": [(1, g(os.path.join(TR, "LAPIZ", "*"), os.path.join(TR, "Gemini_Generated_Image_uy13*"), os.path.join(TR, "Gemini_Generated_Image_2tepo*"),
                     os.path.join(TR, "Hoja de garabatos de grafito*"), os.path.join(TR, "Garabatos abstractos de grafito*"),
                     os.path.join(TR, "Doodles de grafito*")))],
-    "cera": [(2, g(os.path.join(TR, "Cinco trazos azules sobre*"), os.path.join(TR, "Cinco trazos rojos*"), os.path.join(TR, "Cuatro trazos rojos texturizados*"),
-                   os.path.join(TR, "Tres trazos azules texturizados*"), os.path.join(TR, "Gemini_Generated_Image_4k0x*"),
-                   os.path.join(TR, "Garabato de carb*"), os.path.join(TR, "Trazo serpenteante*"))),
-             (1, g(os.path.join(TR, "CERAS", "*")))],
     # ceras de colores: óleo en barra / pastel graso, cera escolar y pastel seco
     "barra": [(2, g(os.path.join(TR, "CERAS", "*")))],
     "manley": [(2, g(os.path.join(TR, "Cinco trazos rojos*"), os.path.join(TR, "Cuatro trazos rojos texturizados*"),
                      os.path.join(TR, "Cinco trazos azules sobre*"), os.path.join(TR, "Tres trazos azules texturizados*")))],
-    "pastel": [(2, g(os.path.join(TR, "Gemini_Generated_Image_4k0x*"), os.path.join(TR, "Garabato de carb*"),
-                     ))],
     # gouache plano (sin volumen): la carpeta GUACHE y las pinceladas grises sueltas
     "guache": [(2, g(os.path.join(TR, "GUACHE", "*"),
                      *[os.path.join(TR, f"Gemini_Generated_Image_{k}.jpg") for k in
@@ -77,11 +73,11 @@ OPAQUE = {"guache", "oleo", "gouache", "cera", "barra", "manley", "pastel"}
 
 
 def md5(f):
-    return hashlib.md5(open(f, "rb").read()).hexdigest()
+    return hashlib.md5(open(B.real(f), "rb").read()).hexdigest()
 
 
 def load_rgb(path, maxside=None):
-    im = Image.open(path).convert("RGB")
+    im = Image.open(B.real(path)).convert("RGB")
     if maxside and max(im.size) > maxside:
         im.thumbnail((maxside, maxside), Image.LANCZOS)
     return np.asarray(im).astype(np.float32) / 255.0
@@ -302,7 +298,7 @@ def tile_stats(L):
 
 
 def tile_planes(path, N, color):
-    im = Image.open(path).convert("RGB")
+    im = Image.open(B.real(path)).convert("RGB")
     im = im.resize((N, N), Image.BOX)  # factor entero: sigue siendo repetible
     a = np.asarray(im).astype(np.float32) / 255
     L = 0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]
@@ -346,12 +342,10 @@ def build_tiles():
 
 
 # ------------------------------------------------------------------ texturas 9:16 (no repetibles)
+# (20-11-2026) fuera: cera, pastel (familias) y goteos, grafito, carbón (overlays): el motor no los usaba
 OVERLAYS = {
     "impresion": ["1f8a", "flvu", "gjqu", "v3eb"],
     "madera": ["2a6p", "2uid", "xydf"],
-    "goteos": ["2nzv", "bmol", "v9cx"],
-    "grafito": ["614e", "h24g", "o4l9"],
-    "carbon": ["e6zo", "uwxt"],
 }
 
 
@@ -363,7 +357,7 @@ def build_overlays():
             m = [f for f in files if key in os.path.basename(f) and "(1)" not in f]
             if not m:
                 continue
-            im = Image.open(m[0]).convert("L")
+            im = Image.open(B.real(m[0])).convert("L")
             w, h = im.size
             f2 = 288 / min(w, h)
             im = im.resize((int(w * f2), int(h * f2)), Image.LANCZOS)
@@ -407,7 +401,7 @@ def build_grano():
     files = g(os.path.join(TR, "LAPIZ", "*"))
     items = []
     for f in files:
-        L = np.asarray(Image.open(f).convert("L")).astype(np.float32) / 255
+        L = np.asarray(Image.open(B.real(f)).convert("L")).astype(np.float32) / 255
         bg = ES.fit_background(L)
         D = np.clip(1 - L / np.maximum(bg, 0.05), 0, 1)
         h, w = D.shape
@@ -460,6 +454,7 @@ def build_grano():
 
 
 if __name__ == "__main__":
+    B.aviso()
     only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
     if only in (None, "pin"): build_pinceladas()
     if only in (None, "manchas"): build_manchas()

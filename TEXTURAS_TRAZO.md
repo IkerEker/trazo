@@ -462,7 +462,10 @@ Abreviaturas usadas en el documento:
 - **RGRAND:** todas se usan. **RTILE:** todas se usan.
 - **REFERENCIAS/** completa: solo análisis visual.
 
-### 3.6 Assets que se construyen pero no aportan nada (peso muerto en el .ccx)
+### 3.6 Assets que se construían pero no aportaban nada
+
+> **Quitados en 1.13.2 (20-11-2026):** ya no se construyen ni van en el .ccx. Los 29 renders de
+> `tools/bench.js` salen idénticos sin ellos y los otros 16 `.bin` siguen con el mismo md5.
 
 | .bin | Peso | Motivo |
 |---|---|---|

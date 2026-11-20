@@ -1,0 +1,18 @@
+{
+ "grano_grafito.bin": "0b06713ff4eccc480cc13a161c66a75d",
+ "manchas.bin": "47e262b18d7239d96472869dd7511c16",
+ "ov_impresion.bin": "8597bb2794ac1b8b32a7782c10ca3d93",
+ "ov_madera.bin": "a9ba69dc259838d5c3fb5a2124b1cb7f",
+ "pin_acuarela.bin": "5e73227027eea4c2b1e85bafc7295fe9",
+ "pin_barra.bin": "bafa281d4747ec11bfe6c421788f0c7c",
+ "pin_gouache.bin": "0c71130a851dcca641111c3381c1c03e",
+ "pin_guache.bin": "b3c97343b4093af57eb8f218f23b0cdc",
+ "pin_lapiz.bin": "731d07becb0b51e23c388c40df29f5a1",
+ "pin_manley.bin": "fd25ce43b756278f8fb40f53d83ce8a2",
+ "pin_oleo.bin": "1ba8f8ad4f2ef8e317a5e451c7ea5284",
+ "soporte-acuarela.bin": "83b91542abd1e70b1a63c2871aadf3a2",
+ "soporte-dibujo.bin": "284851486a2eee5166407b269e41a058",
+ "soporte-lienzo.bin": "47b251d745e5d4b0cb1e6f83c9cfb932",
+ "tiles_acuarela.bin": "4b9b8a58161880d822240dea7006a7f2",
+ "tiles_pintura.bin": "f78dd60c511abaf58c04496034a64733"
+}

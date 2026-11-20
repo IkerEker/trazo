@@ -39,9 +39,9 @@ const SUPPORT_FOR = {
 const ASSETS_FOR = {
   oleo: ["pin_oleo", "pin_gouache", "manchas", "tiles_pintura"],
   gouache: ["pin_guache", "manchas", "tiles_pintura", "pin_acuarela", "tiles_acuarela"],
-  acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz", "ov_goteos"],
-  lapiz: ["grano_grafito", "pin_lapiz", "pin_cera", "ov_carbon"],
-  ceras: ["pin_barra", "pin_manley", "pin_pastel"],
+  acuarela: ["pin_acuarela", "tiles_acuarela", "pin_lapiz"],
+  lapiz: ["grano_grafito", "pin_lapiz"],
+  ceras: ["pin_barra", "pin_manley"],
   mixtalg: ["pin_lapiz", "pin_guache", "manchas"],
   xilografia: ["ov_madera", "ov_impresion"],
 };
@@ -71,6 +71,45 @@ function strokesOf(assets, names) {
   return samples.length ? { kind: "strokes", samples } : null;
 }
 
+
+/* ---------- memoria del análisis entre generaciones ----------
+ * Las direcciones de los trazos y las manchas dependen solo de la imagen y de unos pocos ajustes
+ * (grosor, detalle, realismo, selección): no usan el azar. Si se vuelve a generar con la misma imagen
+ * y esos ajustes iguales (otra semilla, otra intensidad, otro color…), se reutilizan.
+ * Se guarda y se devuelve siempre una COPIA, así que el resultado es idéntico byte a byte
+ * (tools/bench.js --check). Una sola entrada: memoria acotada. */
+const MEMO = { flowKey: null, flow: null, segKey: null, seg: null, on: true };
+function deepCopy(v) {
+  if (v === null || typeof v !== "object") return v;
+  if (ArrayBuffer.isView(v)) return v.slice();
+  if (Array.isArray(v)) return v.map(deepCopy);
+  const o = {};
+  for (const k of Object.keys(v)) o[k] = deepCopy(v[k]);
+  return o;
+}
+function hashBytes(u8, h1, h2) {
+  // dos FNV-1a de 32 bits con semillas distintas sobre palabras de 4 bytes
+  const n4 = u8.length >> 2;
+  const u32 = (u8.byteOffset & 3) === 0 ? new Uint32Array(u8.buffer, u8.byteOffset, n4) : null;
+  for (let i = 0; i < n4; i++) {
+    const w = u32 ? u32[i] : (u8[i * 4] | (u8[i * 4 + 1] << 8) | (u8[i * 4 + 2] << 16) | (u8[i * 4 + 3] << 24)) >>> 0;
+    h1 = Math.imul(h1 ^ w, 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ ((w >>> 16) | (w << 16)), 2246822519) >>> 0;
+  }
+  for (let i = n4 * 4; i < u8.length; i++) { h1 = Math.imul(h1 ^ u8[i], 16777619) >>> 0; h2 = Math.imul(h2 ^ u8[i], 2246822519) >>> 0; }
+  return h1.toString(16) + h2.toString(16);
+}
+function inputKey(input) {
+  const d = input.data;
+  const u8 = d instanceof Uint8Array ? d : new Uint8Array(d.buffer, d.byteOffset, d.byteLength);
+  return input.width + "x" + input.height + "x" + (input.components || 4) + ":" + hashBytes(u8, 2166136261, 1234567891);
+}
+function selectionKey(sel) {
+  if (!sel || !sel.mask) return "sin";
+  const m = sel.mask;
+  return sel.mode + ":" + hashBytes(m instanceof Uint8Array ? m : new Uint8Array(m.buffer, m.byteOffset, m.byteLength), 2166136261, 97);
+}
+
 async function render(input, opts, hooks) {
   const tech = T.BY_ID[opts.technique] ? opts.technique : "oleo";
   const p = T.normalized(tech, opts.params);
@@ -90,7 +129,17 @@ async function render(input, opts, hooks) {
   clock.stage(0, 0.05, "Analizando la imagen");
   await ctx.buildBase(clock);
   clock.stage(0.05, 0.11, "Calculando la dirección de los trazos");
-  await ctx.buildFlow(flowOptions(tech, p), clock);
+  const fo = flowOptions(tech, p);
+  const useMemo = MEMO.on && !(hooks && hooks.noMemo);
+  const flowKey = useMemo ? inputKey(input) + "|" + JSON.stringify(fo) : null;
+  if (useMemo && MEMO.flowKey === flowKey) Object.assign(ctx, deepCopy(MEMO.flow));
+  else {
+    await ctx.buildFlow(fo, clock);
+    if (useMemo) {
+      MEMO.flowKey = flowKey; MEMO.segKey = null; MEMO.seg = null;
+      MEMO.flow = deepCopy({ edgeRaw: ctx.edgeRaw, edge: ctx.edge, c2f: ctx.c2f, s2f: ctx.s2f, c2: ctx.c2, s2: ctx.s2, coh: ctx.coh });
+    }
+  }
   ctx.setSelection(opts.selection);
   ctx.buildCoverage(p.cobertura, { lumWeight: tech === "acuarela" ? 0.7 : tech === "lapiz" || tech === "ceras" ? 0.45 : 0.55 });
 
@@ -99,7 +148,13 @@ async function render(input, opts, hooks) {
   // realismo: más alto = la imagen se divide en más manchas (más parecido a la foto)
   detail = Math.max(0.05, Math.min(1.15, detail * (0.5 + p.realismo)));
   clock.stage(0.11, 0.2, "Viendo la imagen en manchas");
-  const seg = await Seg.segment(ctx, { detail }, clock);
+  const segKey = useMemo ? flowKey + "|" + detail + "|" + selectionKey(opts.selection) : null;
+  let seg;
+  if (useMemo && MEMO.segKey === segKey) seg = deepCopy(MEMO.seg);
+  else {
+    seg = await Seg.segment(ctx, { detail }, clock);
+    if (useMemo) { MEMO.segKey = segKey; MEMO.seg = deepCopy(seg); }
+  }
   // etiquetas a resolución completa (el pintor por capas no las necesita)
   const diluido = tech === "gouache" && p.modo === "diluido";
   const Lfull = (tech === "oleo" || tech === "gouache" || tech === "ceras") && !diluido ? null : (clock.stage(0.2, 0.25, "Ajustando los bordes"), await Seg.fullLabels(ctx, seg, clock));
@@ -177,4 +232,5 @@ function flatten(paint, paper, W, H, out) {
 module.exports = {
   render, flatten, Techniques: T, CancelError: C.CancelError,
   parseTexture: Lib.parse, SUPPORT_FOR, ASSETS_FOR,
+  clearMemo() { MEMO.flowKey = MEMO.flow = MEMO.segKey = MEMO.seg = null; }, MEMO,
 };

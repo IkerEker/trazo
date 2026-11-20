@@ -23,3 +23,12 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+
+# Resultados del banco de pruebas (tools/bench.js); la referencia exacta está en tools/ref/
+tools/bench_out/
+
+# Informes de tools/casa_local.py (se regeneran)
+INFORME_CASA.txt
+REPETIDOS_ENCONTRADOS.txt
+BENCH_CASA.txt
+_construido_distinto/
